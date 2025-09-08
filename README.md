@@ -1,6 +1,6 @@
 # Anchora
 
-A high-performance task management system that embeds tasks directly into source code comments, enabling developers to track and manage development tasks without leaving their codebase.
+in development
 
 ## Overview
 
