@@ -1,0 +1,290 @@
+{
+  "name": "anchora-task-manager",
+  "displayName": "Anchora Task Manager",
+  "description": "Revolutionary task manager for developers that ties tasks to code, not files",
+  "version": "0.1.0",
+  "publisher": "anchora-team",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/vremyavnikuda/anchora"
+  },
+  "engines": {
+    "vscode": "^1.70.0"
+  },
+  "categories": [
+    "Other",
+    "Extension Packs"
+  ],
+  "keywords": [
+    "task-manager",
+    "todo",
+    "project-management",
+    "development-tools"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "anchora",
+          "title": "Anchora Task Manager",
+          "icon": "$(list-selection)"
+        }
+      ]
+    },
+    "views": {
+      "anchora": [
+        {
+          "id": "anchoraTaskTree",
+          "name": "Tasks",
+          "when": "workspaceHasAnchoraProject"
+        },
+        {
+          "id": "anchoraWelcome",
+          "name": "Welcome",
+          "when": "!workspaceHasAnchoraProject"
+        }
+      ],
+      "explorer": [
+        {
+          "id": "anchoraTaskTreeExplorer",
+          "name": "Anchora Tasks",
+          "when": "workspaceHasAnchoraProject"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "anchora.createTask",
+        "title": "Create New Task",
+        "icon": "$(add)"
+      },
+      {
+        "command": "anchora.refreshTasks",
+        "title": "Refresh Tasks",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "anchora.scanProject",
+        "title": "Scan Project for Tasks",
+        "icon": "$(search)"
+      },
+      {
+        "command": "anchora.goToTaskDefinition",
+        "title": "Go to Task Definition"
+      },
+      {
+        "command": "anchora.findTaskReferences",
+        "title": "Find All Task References"
+      },
+      {
+        "command": "anchora.updateTaskStatus",
+        "title": "Update Task Status"
+      },
+      {
+        "command": "anchora.viewAllTaskLists",
+        "title": "View All Task Lists",
+        "icon": "$(list-unordered)"
+      },
+      {
+        "command": "anchora.viewTasksByStatus",
+        "title": "View Tasks by Status",
+        "icon": "$(filter)"
+      },
+      {
+        "command": "anchora.searchTasks",
+        "title": "Search Tasks",
+        "icon": "$(search)"
+      },
+      {
+        "command": "anchora.openTaskDashboard",
+        "title": "Open Task Dashboard",
+        "icon": "$(dashboard)"
+      },
+      {
+        "command": "anchora.showOutputChannel",
+        "title": "Show Output Channel",
+        "icon": "$(output)"
+      },
+      {
+        "command": "anchora.initializeProject",
+        "title": "Initialize Anchora Project",
+        "icon": "$(rocket)"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "anchora.createTask",
+        "key": "ctrl+shift+t",
+        "when": "workspaceHasAnchoraProject"
+      },
+      {
+        "command": "anchora.goToTaskDefinition",
+        "key": "f12",
+        "when": "editorTextFocus && anchoraTaskContext"
+      },
+      {
+        "command": "anchora.findTaskReferences",
+        "key": "shift+f12",
+        "when": "editorTextFocus && anchoraTaskContext"
+      },
+      {
+        "command": "anchora.viewAllTaskLists",
+        "key": "ctrl+shift+a",
+        "when": "workspaceHasAnchoraProject"
+      },
+      {
+        "command": "anchora.searchTasks",
+        "key": "ctrl+shift+f",
+        "when": "workspaceHasAnchoraProject"
+      },
+      {
+        "command": "anchora.openTaskDashboard",
+        "key": "ctrl+shift+d",
+        "when": "anchoraExtensionActive"
+      }
+    ],
+    "menus": {
+      "commandPalette": [
+        {
+          "command": "anchora.viewAllTaskLists",
+          "when": "workspaceHasAnchoraProject"
+        },
+        {
+          "command": "anchora.viewTasksByStatus",
+          "when": "workspaceHasAnchoraProject"
+        },
+        {
+          "command": "anchora.searchTasks",
+          "when": "workspaceHasAnchoraProject"
+        },
+        {
+          "command": "anchora.createTask",
+          "when": "workspaceHasAnchoraProject"
+        },
+        {
+          "command": "anchora.scanProject",
+          "when": "workspaceHasAnchoraProject"
+        },
+        {
+          "command": "anchora.openTaskDashboard"
+        },
+        {
+          "command": "anchora.showOutputChannel"
+        },
+        {
+          "command": "anchora.initializeProject"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "anchora.createTask",
+          "when": "view == anchoraTaskTree || view == anchoraTaskTreeExplorer",
+          "group": "navigation"
+        },
+        {
+          "command": "anchora.refreshTasks",
+          "when": "view == anchoraTaskTree || view == anchoraTaskTreeExplorer",
+          "group": "navigation"
+        },
+        {
+          "command": "anchora.scanProject",
+          "when": "view == anchoraTaskTree || view == anchoraTaskTreeExplorer || view == anchoraWelcome",
+          "group": "navigation"
+        },
+        {
+          "command": "anchora.viewAllTaskLists",
+          "when": "view == anchoraTaskTree || view == anchoraTaskTreeExplorer",
+          "group": "navigation"
+        },
+        {
+          "command": "anchora.viewTasksByStatus",
+          "when": "view == anchoraTaskTree || view == anchoraTaskTreeExplorer",
+          "group": "secondary"
+        },
+        {
+          "command": "anchora.openTaskDashboard",
+          "when": "view == anchoraWelcome",
+          "group": "navigation"
+        },
+        {
+          "command": "anchora.showOutputChannel",
+          "when": "view == anchoraWelcome || view == anchoraTaskTree || view == anchoraTaskTreeExplorer",
+          "group": "secondary"
+        },
+        {
+          "command": "anchora.initializeProject",
+          "when": "view == anchoraWelcome",
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "anchora.updateTaskStatus",
+          "when": "(view == anchoraTaskTree || view == anchoraTaskTreeExplorer) && viewItem == task"
+        },
+        {
+          "command": "anchora.findTaskReferences",
+          "when": "(view == anchoraTaskTree || view == anchoraTaskTreeExplorer) && viewItem == task"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Anchora Task Manager",
+      "properties": {
+        "anchora.filePatterns": {
+          "type": "array",
+          "default": ["**/*.rs", "**/*.ts", "**/*.js", "**/*.py", "**/*.java", "**/*.cpp", "**/*.c", "**/*.h", "**/*.go"],
+          "description": "File patterns to scan for tasks"
+        },
+        "anchora.ignoredDirectories": {
+          "type": "array",
+          "default": ["target", "node_modules", ".git", ".vscode", "dist", "build", "__pycache__"],
+          "description": "Directories to ignore when scanning"
+        },
+        "anchora.decorationColors": {
+          "type": "object",
+          "default": {
+            "todo": "#ff6b6b",
+            "in_progress": "#4ecdc4",
+            "done": "#45b7d1",
+            "blocked": "#f9ca24"
+          },
+          "description": "Colors for task status decorations"
+        }
+      }
+    }
+  },
+  "files": [
+    "out/**/*",
+    "server/**/*",
+    "README.md",
+    "package.json"
+  ],
+  "scripts": {
+    "vscode:prepublish": "npm run build:all",
+    "build:all": "npm run build:backend && npm run compile",
+    "build:backend": "cd .. && cargo build --release && cd vscode && npm run copy:backend",
+    "copy:backend": "node -e \"const fs=require('fs'),path=require('path');const src=path.join('..','target','release',process.platform==='win32'?'anchora.exe':'anchora');const dest=path.join('server',path.basename(src));fs.mkdirSync('server',{recursive:true});fs.copyFileSync(src,dest);console.log('Backend copied to',dest);\"",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile && npm run lint",
+    "lint": "eslint src --ext ts",
+    "test": "node ./out/test/runTest.js",
+    "package": "vsce package",
+    "package:quick": "npm run compile && vsce package"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.70.0",
+    "@types/node": "18.x",
+    "@typescript-eslint/eslint-plugin": "^5.31.0",
+    "@typescript-eslint/parser": "^5.31.0",
+    "eslint": "^8.20.0",
+    "typescript": "^4.7.4",
+    "@vscode/test-electron": "^2.1.5",
+    "@vscode/vsce": "^2.15.0"
+  }
+}

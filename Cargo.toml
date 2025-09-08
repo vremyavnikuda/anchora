@@ -1,0 +1,53 @@
+[package]
+name = "anchora"
+version = "0.1.0"
+edition = "2024"
+description = "logic for anchora"
+authors = ["apex dev"]
+license = "MIT"
+keywords = ["task-manager", "vscode", "development-tools"]
+categories = ["development-tools"]
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+regex = "1.10"
+tokio = { version = "1.0", features = ["full"] }
+anyhow = "1.0"
+chrono = { version = "0.4", features = ["serde"] }
+notify = "6.1"
+clap = { version = "4.4", features = ["derive"] }
+async-trait = "0.1"
+
+[dev-dependencies]
+tempfile = "3.12"
+tokio-test = "0.4"
+
+# Конфигурация для тестов
+[[test]]
+name = "integration"
+path = "test/integration_tests.rs"
+
+[[test]]
+name = "task_manager"
+path = "test/task_manager_tests.rs"
+
+[[test]]
+name = "file_parser"
+path = "test/file_parser_tests.rs"
+
+[[test]]
+name = "storage"
+path = "test/storage_tests.rs"
+
+[[test]]
+name = "communication"
+path = "test/communication_tests.rs"
+
+[lib]
+name = "anchora"
+path = "src/lib.rs"
+
+[[bin]]
+name = "anchora"
+path = "src/main.rs"
