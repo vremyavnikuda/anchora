@@ -49,7 +49,7 @@ impl Default for WatcherConfig {
 }
 pub struct FileWatcher {
     config: WatcherConfig,
-    event_tx: mpsc::UnboundedSender<FileEvent>,
+    _event_tx: mpsc::UnboundedSender<FileEvent>,
     _watcher: RecommendedWatcher,
 }
 
@@ -76,7 +76,7 @@ impl FileWatcher {
         println!("Started watching directory: {:?}", workspace_path);
         let file_watcher = Self {
             config,
-            event_tx,
+            _event_tx: event_tx,
             _watcher: watcher,
         };
         Ok((file_watcher, event_rx))
@@ -234,7 +234,7 @@ mod tests {
         
         let file_watcher = FileWatcher {
             config,
-            event_tx: tx,
+            _event_tx: tx,
             _watcher: dummy_watcher,
         };
         assert!(file_watcher.should_process_file(&test_file));
