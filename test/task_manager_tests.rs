@@ -246,3 +246,104 @@ fn test_task_status_deserialization() {
     let blocked: TaskStatus = serde_json::from_str("\"blocked\"").unwrap();
     assert_eq!(blocked, TaskStatus::Blocked);
 }
+
+#[test]
+fn test_delete_task_basic() {
+    let mut project = ProjectData::new(Some("test-project".to_string()));
+    
+    // Add a task
+    project.add_task("dev", "task_1", "Test task".to_string(), None).unwrap();
+    assert!(project.get_task("dev", "task_1").is_some());
+    
+    // Delete the task
+    let result = project.delete_task("dev", "task_1");
+    assert!(result.is_ok());
+    assert!(project.get_task("dev", "task_1").is_none());
+}
+
+#[test]
+fn test_delete_task_with_files() {
+    let mut project = ProjectData::new(None);
+    
+    // Add task with files
+    project.add_task("dev", "task_1", "Test task".to_string(), None).unwrap();
+    project.update_task_file("dev", "task_1", "src/main.rs".to_string(), 42, None).unwrap();
+    project.update_task_file("dev", "task_1", "src/lib.rs".to_string(), 25, None).unwrap();
+    
+    // Verify task exists with files
+    let task = project.get_task("dev", "task_1").unwrap();
+    assert_eq!(task.files.len(), 2);
+    
+    // Delete the task
+    let result = project.delete_task("dev", "task_1");
+    assert!(result.is_ok());
+    assert!(project.get_task("dev", "task_1").is_none());
+}
+
+#[test]
+fn test_delete_task_updates_index() {
+    let mut project = ProjectData::new(None);
+    
+    // Add multiple tasks
+    project.add_task("dev", "task_1", "Task 1".to_string(), None).unwrap();
+    project.add_task("dev", "task_2", "Task 2".to_string(), None).unwrap();
+    project.add_task("bug", "task_3", "Task 3".to_string(), None).unwrap();
+    
+    // Add files to tasks
+    project.update_task_file("dev", "task_1", "file1.rs".to_string(), 10, None).unwrap();
+    project.update_task_file("dev", "task_2", "file1.rs".to_string(), 20, None).unwrap();
+    
+    // Verify index before deletion
+    assert_eq!(project.sections.len(), 2);
+    assert_eq!(project.sections["dev"].len(), 2);
+    assert_eq!(project.sections["bug"].len(), 1);
+    
+    // Delete one task from dev section
+    let result = project.delete_task("dev", "task_1");
+    assert!(result.is_ok());
+    
+    // Verify section still exists (has task_2)
+    assert_eq!(project.sections.len(), 2);
+    assert_eq!(project.sections["dev"].len(), 1);
+    assert!(project.sections["dev"].contains_key("task_2"));
+    
+    // Delete last task from dev section
+    let result = project.delete_task("dev", "task_2");
+    assert!(result.is_ok());
+    
+    // Verify dev section is removed when empty
+    assert_eq!(project.sections.len(), 1);
+    assert!(!project.sections.contains_key("dev"));
+    assert!(project.sections.contains_key("bug"));
+}
+
+#[test]
+fn test_delete_nonexistent_task() {
+    let mut project = ProjectData::new(None);
+    
+    // Try to delete from non-existent section
+    let result = project.delete_task("nonexistent", "task_1");
+    assert!(result.is_err());
+    assert!(result.unwrap_err().to_string().contains("Section not found"));
+    
+    // Add section but try to delete non-existent task
+    project.add_task("dev", "task_1", "Test task".to_string(), None).unwrap();
+    let result = project.delete_task("dev", "nonexistent");
+    assert!(result.is_err());
+    assert!(result.unwrap_err().to_string().contains("Task not found"));
+}
+
+#[test]
+fn test_delete_task_updates_timestamp() {
+    let mut project = ProjectData::new(None);
+    
+    project.add_task("dev", "task_1", "Test task".to_string(), None).unwrap();
+    let initial_timestamp = project.meta.last_updated;
+    
+    // Small delay to ensure timestamp changes
+    std::thread::sleep(std::time::Duration::from_millis(1));
+    
+    let result = project.delete_task("dev", "task_1");
+    assert!(result.is_ok());
+    assert!(project.meta.last_updated > initial_timestamp);
+}

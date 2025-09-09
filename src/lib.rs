@@ -3,6 +3,7 @@ pub mod file_parser;
 pub mod storage;
 pub mod communication;
 pub mod file_watcher;
+pub mod error_macros;
 
 pub use task_manager::{
     Task, TaskStatus, ProjectData, TaskSection, TaskIndex, ProjectMeta, TaskFile
@@ -19,7 +20,7 @@ pub use storage::{
 pub use communication::{
     JsonRpcRequest, JsonRpcResponse, JsonRpcError, JsonRpcHandler, JsonRpcServer, JsonRpcClient,
     ScanProjectParams, ScanProjectResult, GetTasksParams, UpdateTaskStatusParams,
-    CreateTaskParams, FindTaskReferencesParams, TaskReference
+    CreateTaskParams, DeleteTaskParams, FindTaskReferencesParams, TaskReference
 };
 
 pub use file_watcher::{

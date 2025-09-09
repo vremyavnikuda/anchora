@@ -1,6 +1,6 @@
 /**
 /**
- * Main extension entry point for Anchora Task Manager
+ * Main extension entry point for Anchora
  * Follows VSCode extension best practices and TypeScript strict typing
  */
 
@@ -59,9 +59,9 @@ function logDebug(message: string): void {
 }
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
-    outputChannel = vscode.window.createOutputChannel('Anchora Task Manager');
+    outputChannel = vscode.window.createOutputChannel('Anchora');
     context.subscriptions.push(outputChannel);
-    logInfo('Anchora Task Manager extension activation started');
+    logInfo('Anchora extension activation started');
     try {
         if (!vscode.workspace.workspaceFolders?.length) {
             logWarning('No workspace folder found, extension will not activate');
@@ -108,10 +108,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         logInfo('Tree views registered successfully');
         logInfo('Registering commands...');
         commandHandler.registerCommands();
-        const showOutputCommand = vscode.commands.registerCommand('anchora.showOutputChannel', () => {
-            outputChannel.show();
-        });
-        context.subscriptions.push(showOutputCommand);
         logInfo('Registering providers...');
         decorationProvider.register(context);
         statusBarManager.register(context);
@@ -146,8 +142,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
                 decorationProvider.refreshDecorations();
                 logInfo('Refreshing status bar...');
                 statusBarManager.refresh();
-                logInfo('Anchora Task Manager extension activated successfully');
-                vscode.window.showInformationMessage('Anchora Task Manager activated');
+                logInfo('Anchora extension activated successfully');
+                vscode.window.showInformationMessage('Anchora activated');
             } catch (error) {
                 logError('Failed to initialize Anchora features', error);
                 if (error instanceof BackendConnectionError) {
@@ -172,15 +168,15 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             }
         });
     } catch (error) {
-        logError('Failed to activate Anchora Task Manager extension', error);
+        logError('Failed to activate Anchora extension', error);
         vscode.window.showErrorMessage(
-            `Failed to activate Anchora Task Manager: ${error instanceof Error ? error.message : String(error)}`
+            `Failed to activate Anchora: ${error instanceof Error ? error.message : String(error)}`
         );
     }
 }
 
 export function deactivate(): void {
-    logInfo('Anchora Task Manager extension is being deactivated');
+    logInfo('Anchora extension is being deactivated');
     if (outputChannel) {
         outputChannel.dispose();
     }
@@ -354,7 +350,7 @@ class WelcomeViewProvider implements vscode.TreeDataProvider<WelcomeItem> {
         if (!element) {
             return Promise.resolve([
                 new WelcomeItem(
-                    '📋 Welcome to Anchora Task Manager',
+                    '📋 Welcome to Anchora',
                     'Universal task manager for any project',
                     vscode.TreeItemCollapsibleState.None
                 ),

@@ -1,8 +1,8 @@
-# Anchora Task Manager - VSCode Extension
+# Anchora - VSCode Extension
 
 ## Overview
 
-Anchora Task Manager is a VSCode extension that provides intelligent task tracking and management directly within your codebase. Unlike traditional task managers that operate at the file level, Anchora embeds tasks directly into source code comments using a structured syntax, enabling developers to maintain task context alongside implementation.
+Anchora is a VSCode extension that provides intelligent task tracking and management directly within your codebase. Unlike traditional task managers that operate at the file level, Anchora embeds tasks directly into source code comments using a structured syntax, enabling developers to maintain task context alongside implementation.
 
 ## Core Architecture
 
@@ -156,7 +156,7 @@ Automatically excluded from scanning:
 
 #### From VSIX Package (Recommended)
 ```bash
-code --install-extension anchora-task-manager-0.1.0.vsix
+code --install-extension anchora-0.1.0.vsix
 ```
 
 #### Development Installation

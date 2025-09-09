@@ -178,6 +178,34 @@ impl ProjectData {
         }
     }
 
+    pub fn delete_task(&mut self, section: &str, task_id: &str) -> anyhow::Result<()> {
+        // Check if task exists
+        if !self.sections.contains_key(section) {
+            return Err(anyhow::anyhow!("Section not found: {}", section));
+        }
+        
+        let section_tasks = self.sections.get_mut(section).unwrap();
+        if !section_tasks.contains_key(task_id) {
+            return Err(anyhow::anyhow!("Task not found: {}:{}", section, task_id));
+        }
+        
+        // Remove the task
+        section_tasks.remove(task_id);
+        
+        // If section is now empty, remove it
+        if section_tasks.is_empty() {
+            self.sections.remove(section);
+        }
+        
+        // Update metadata
+        self.meta.last_updated = Utc::now();
+        
+        // Rebuild index to ensure consistency
+        self.rebuild_index();
+        
+        Ok(())
+    }
+
     pub fn rebuild_index(&mut self) {
         self.index.clear();
         for (section_name, section) in &self.sections {
@@ -205,5 +233,26 @@ mod tests {
         project.add_task("dev", "task_1", "Test task".to_string(), None).unwrap();
         let task = project.get_task("dev", "task_1").unwrap();
         assert_eq!(task.title, "Test task");
+    }
+
+    #[test]
+    fn test_delete_task() {
+        let mut project = ProjectData::new(Some("test-project".to_string()));
+        
+        // Add a task
+        project.add_task("dev", "task_1", "Test task".to_string(), None).unwrap();
+        assert!(project.get_task("dev", "task_1").is_some());
+        
+        // Delete the task
+        project.delete_task("dev", "task_1").unwrap();
+        assert!(project.get_task("dev", "task_1").is_none());
+        
+        // Try to delete non-existent task
+        let result = project.delete_task("dev", "task_1");
+        assert!(result.is_err());
+        
+        // Try to delete from non-existent section
+        let result = project.delete_task("nonexistent", "task_1");
+        assert!(result.is_err());
     }
 }

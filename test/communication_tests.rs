@@ -189,6 +189,20 @@ fn test_update_task_status_params() {
 }
 
 #[test]
+fn test_delete_task_params() {
+    let params = DeleteTaskParams {
+        section: "dev".to_string(),
+        task_id: "task_to_delete".to_string(),
+    };
+    
+    let serialized = serde_json::to_string(&params).unwrap();
+    let deserialized: DeleteTaskParams = serde_json::from_str(&serialized).unwrap();
+    
+    assert_eq!(deserialized.section, "dev");
+    assert_eq!(deserialized.task_id, "task_to_delete");
+}
+
+#[test]
 fn test_create_task_params() {
     let params = CreateTaskParams {
         section: "dev".to_string(),

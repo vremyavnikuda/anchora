@@ -5,28 +5,104 @@
 
 import * as vscode from 'vscode';
 import * as path from 'path';
-import { JsonRpcClient } from './client';
+import { JsonRpcClient, setDebugMode, isDebugMode } from './client';
 import { TaskTreeProvider } from './taskProvider';
 import {
     TaskStatus,
     CreateTaskParams,
     ScanProjectParams,
+    DeleteTaskParams,
     createTaskId,
     createSectionName,
     AnchoraError
 } from './types';
+
+let commandOutputChannel: vscode.OutputChannel | null = null;
+
+function getCommandOutputChannel(): vscode.OutputChannel {
+    if (!commandOutputChannel) {
+        commandOutputChannel = vscode.window.createOutputChannel('Anchora Commands');
+    }
+    return commandOutputChannel;
+}
+
+function logCommandInfo(message: string, data?: any): void {
+    const timestamp = new Date().toISOString();
+    const logMessage = `[${timestamp}] COMMAND: ${message}`;
+    console.log(logMessage);
+    getCommandOutputChannel().appendLine(logMessage);
+
+    if (data !== undefined && isDebugMode()) {
+        const dataStr = typeof data === 'object' ? JSON.stringify(data, null, 2) : String(data);
+        getCommandOutputChannel().appendLine(`Data: ${dataStr}`);
+        console.log('Command data:', data);
+    }
+}
+
+function logCommandError(message: string, error?: any, context?: any): void {
+    const timestamp = new Date().toISOString();
+    const errorDetails = error ? ` - ${error instanceof Error ? error.message : String(error)}` : '';
+    const errorStack = error instanceof Error ? error.stack : '';
+    const logMessage = `[${timestamp}] COMMAND ERROR: ${message}${errorDetails}`;
+
+    console.error(logMessage);
+    getCommandOutputChannel().appendLine(logMessage);
+
+    if (context && isDebugMode()) {
+        const contextStr = typeof context === 'object' ? JSON.stringify(context, null, 2) : String(context);
+        getCommandOutputChannel().appendLine(`Context: ${contextStr}`);
+        console.error('Error context:', context);
+    }
+
+    if (errorStack && isDebugMode()) {
+        getCommandOutputChannel().appendLine(`Stack trace: ${errorStack}`);
+        console.error('Full error object:', error);
+    }
+
+    // Always show output channel on errors in debug mode
+    if (isDebugMode()) {
+        getCommandOutputChannel().show(true);
+    }
+}
+
+function logCommandDebug(message: string, data?: any): void {
+    if (!isDebugMode()) return;
+
+    const timestamp = new Date().toISOString();
+    const logMessage = `[${timestamp}] COMMAND DEBUG: ${message}`;
+    console.debug(logMessage);
+    getCommandOutputChannel().appendLine(logMessage);
+
+    if (data !== undefined) {
+        const dataStr = typeof data === 'object' ? JSON.stringify(data, null, 2) : String(data);
+        getCommandOutputChannel().appendLine(`Debug data: ${dataStr}`);
+        console.debug('Debug data:', data);
+    }
+}
 
 export class CommandHandler {
     constructor(
         private readonly client: JsonRpcClient,
         private readonly taskProvider: TaskTreeProvider,
         private readonly context: vscode.ExtensionContext
-    ) { }
+    ) {
+        logCommandInfo('CommandHandler initialized');
+
+        // Enable debug mode based on configuration
+        const config = vscode.workspace.getConfiguration('anchora');
+        const debugEnabled = config.get<boolean>('debugMode', false);
+        if (debugEnabled) {
+            setDebugMode(true);
+            logCommandInfo('Debug mode enabled from configuration');
+        }
+    }
 
     /**
      * Register all commands
      */
     registerCommands(): void {
+        logCommandInfo('Registering commands...');
+
         const commands = [
             vscode.commands.registerCommand('anchora.createTask', () => this.createTask()),
             vscode.commands.registerCommand('anchora.refreshTasks', () => this.refreshTasks()),
@@ -36,21 +112,30 @@ export class CommandHandler {
                 this.findTaskReferences(section, taskId)),
             vscode.commands.registerCommand('anchora.updateTaskStatus', (section?: string, taskId?: string) =>
                 this.updateTaskStatus(section, taskId)),
+            vscode.commands.registerCommand('anchora.deleteTask', (section?: string, taskId?: string) =>
+                this.deleteTask(section, taskId)),
             vscode.commands.registerCommand('anchora.showTaskReferences', (section: string, taskId: string) =>
                 this.showTaskReferences(section, taskId)),
             vscode.commands.registerCommand('anchora.searchTasks', () => this.searchTasks()),
             vscode.commands.registerCommand('anchora.viewAllTaskLists', () => this.viewAllTaskLists()),
             vscode.commands.registerCommand('anchora.viewTasksByStatus', () => this.viewTasksByStatus()),
-            vscode.commands.registerCommand('anchora.initializeProject', () => this.initializeProject())
+            vscode.commands.registerCommand('anchora.initializeProject', () => this.initializeProject()),
+            vscode.commands.registerCommand('anchora.toggleDebugMode', () => this.toggleDebugMode()),
+            vscode.commands.registerCommand('anchora.showOutputChannel', () => this.showOutputChannel()),
+            vscode.commands.registerCommand('anchora.testErrorHandling', () => this.testErrorHandling())
         ];
+
         commands.forEach(command => this.context.subscriptions.push(command));
+        logCommandInfo(`Registered ${commands.length} commands successfully`);
     }
 
     /**
      * Create a new task interactively
      */
     private async createTask(): Promise<void> {
+        logCommandInfo('=== Starting create task workflow ===');
         try {
+            logCommandDebug('Prompting for section name');
             const section = await vscode.window.showInputBox({
                 prompt: 'Enter section name (e.g., dev, ref, bug)',
                 placeHolder: 'dev',
@@ -65,7 +150,14 @@ export class CommandHandler {
                 }
             });
 
-            if (!section) return;
+            if (!section) {
+                logCommandInfo('Create task cancelled - no section provided');
+                return;
+            }
+
+            logCommandDebug('Section selected', { section });
+            logCommandDebug('Prompting for task ID');
+
             const taskId = await vscode.window.showInputBox({
                 prompt: 'Enter task ID',
                 placeHolder: 'task_1',
@@ -79,7 +171,15 @@ export class CommandHandler {
                     return undefined;
                 }
             });
-            if (!taskId) return;
+
+            if (!taskId) {
+                logCommandInfo('Create task cancelled - no task ID provided');
+                return;
+            }
+
+            logCommandDebug('Task ID selected', { taskId });
+            logCommandDebug('Prompting for task title');
+
             const title = await vscode.window.showInputBox({
                 prompt: 'Enter task title/description',
                 placeHolder: 'Add new feature for user authentication',
@@ -90,38 +190,70 @@ export class CommandHandler {
                     return undefined;
                 }
             });
-            if (!title) return;
+
+            if (!title) {
+                logCommandInfo('Create task cancelled - no title provided');
+                return;
+            }
+
+            logCommandDebug('Title provided', { title });
+            logCommandDebug('Prompting for optional description');
+
             const description = await vscode.window.showInputBox({
                 prompt: 'Enter detailed description (optional)',
                 placeHolder: 'Detailed implementation notes...'
             });
+
+            logCommandDebug('Description provided', { description: description || 'none' });
+
             const validSection = createSectionName(section);
             const validTaskId = createTaskId(taskId);
+
             if (!validSection || !validTaskId) {
-                throw new AnchoraError('Invalid section name or task ID');
+                const validationError = new AnchoraError('Invalid section name or task ID');
+                logCommandError('Validation failed', validationError, { section, taskId, validSection, validTaskId });
+                throw validationError;
             }
+
             const params: CreateTaskParams = {
                 section: validSection,
                 task_id: validTaskId,
                 title: title.trim(),
                 ...(description?.trim() && { description: description.trim() })
             };
+
+            logCommandInfo('Creating task via backend', { section: validSection, taskId: validTaskId });
+            logCommandDebug('Create task parameters', params);
+
             const result = await this.client.createTask(params);
+
+            logCommandDebug('Create task result', result);
+
             if (result.success) {
+                logCommandInfo(`Task created successfully: ${section}:${taskId}`);
                 vscode.window.showInformationMessage(`Task created: ${section}:${taskId}`);
+
+                logCommandInfo('Refreshing task provider');
                 await this.taskProvider.loadTasks();
+
+                logCommandDebug('Prompting for task reference insertion');
                 const insertReference = await vscode.window.showQuickPick(
                     ['Yes', 'No'],
                     { placeHolder: 'Insert task reference at current cursor position?' }
                 );
+
                 if (insertReference === 'Yes') {
+                    logCommandInfo('Inserting task reference at cursor');
                     await this.insertTaskReference(section, taskId);
                 }
+
+                logCommandInfo('=== Create task workflow completed successfully ===');
             } else {
+                logCommandError('Backend reported task creation failure', null, { result });
                 vscode.window.showErrorMessage(`Failed to create task: ${result.message}`);
             }
         } catch (error) {
-            this.handleError('create task', error);
+            this.handleError('create task', error, { workflow: 'createTask' });
         }
     }
 
@@ -277,6 +409,214 @@ export class CommandHandler {
     }
 
     /**
+     * Delete task interactively with confirmation
+     * Also removes all task anchors from source code files
+     */
+    private async deleteTask(section?: string, taskId?: string): Promise<void> {
+        try {
+            let taskRef: { section: string; taskId: string } | null = null;
+
+            if (section && taskId) {
+                taskRef = { section, taskId };
+            } else {
+                // Try to get task reference from current line first
+                taskRef = await this.getCurrentTaskReference();
+
+                // If no task reference found on current line, let user select from available tasks
+                if (!taskRef) {
+                    taskRef = await this.selectTaskInteractively('Select task to delete');
+                }
+            }
+
+            if (!taskRef) return;
+
+            // Show confirmation dialog
+            const confirmation = await vscode.window.showWarningMessage(
+                `Are you sure you want to delete task ${taskRef.section}:${taskRef.taskId}?\n\nThis will remove the task from the list AND delete all task anchors from your code files.`,
+                { modal: true },
+                'Delete Task & Anchors',
+                'Cancel'
+            );
+
+            if (confirmation !== 'Delete Task & Anchors') {
+                return;
+            }
+
+            logCommandInfo(`Starting deletion of task ${taskRef.section}:${taskRef.taskId} including anchors`);
+
+            // Step 1: Get all task references (anchors) from code files
+            let taskReferences: ReadonlyArray<any> = [];
+            try {
+                taskReferences = await this.client.findTaskReferences({
+                    section: taskRef.section,
+                    task_id: taskRef.taskId
+                });
+                logCommandDebug(`Found ${taskReferences.length} task references to remove`, taskReferences);
+            } catch (error) {
+                logCommandError('Failed to find task references', error);
+                // Continue with deletion even if we can't find references
+            }
+
+            // Step 2: Remove task anchors from source files
+            if (taskReferences.length > 0) {
+                const removedAnchors = await this.removeTaskAnchors(taskRef.section, taskRef.taskId, taskReferences);
+                logCommandInfo(`Removed ${removedAnchors} task anchors from source files`);
+            }
+
+            // Step 3: Delete the task from backend
+            const params: DeleteTaskParams = {
+                section: taskRef.section,
+                task_id: taskRef.taskId
+            };
+
+            const result = await this.client.deleteTask(params);
+            if (result.success) {
+                vscode.window.showInformationMessage(
+                    `Task deleted: ${taskRef.section}:${taskRef.taskId}${taskReferences.length > 0 ? ` (${taskReferences.length} anchors removed)` : ''}`
+                );
+                await this.taskProvider.loadTasks();
+            } else {
+                vscode.window.showErrorMessage(`Failed to delete task: ${result.message}`);
+            }
+        } catch (error) {
+            this.handleError('delete task', error);
+        }
+    }
+
+    /**
+     * Remove task anchors from source code files
+     */
+    private async removeTaskAnchors(section: string, taskId: string, taskReferences: ReadonlyArray<any>): Promise<number> {
+        let removedCount = 0;
+
+        // Group references by file to process each file once
+        const fileGroups = new Map<string, number[]>();
+        for (const ref of taskReferences) {
+            if (!fileGroups.has(ref.file_path)) {
+                fileGroups.set(ref.file_path, []);
+            }
+            fileGroups.get(ref.file_path)!.push(ref.line);
+        }
+
+        logCommandDebug(`Processing ${fileGroups.size} files for anchor removal`);
+
+        // Process each file
+        for (const [filePath, lines] of fileGroups) {
+            try {
+                const removed = await this.removeTaskAnchorsFromFile(section, taskId, filePath, lines);
+                removedCount += removed;
+                logCommandDebug(`Removed ${removed} anchors from ${filePath}`);
+            } catch (error) {
+                logCommandError(`Failed to remove anchors from ${filePath}`, error, {
+                    filePath,
+                    lines,
+                    section,
+                    taskId
+                });
+                // Continue processing other files even if one fails
+            }
+        }
+
+        return removedCount;
+    }
+
+    /**
+     * Remove task anchors from a specific file
+     */
+    private async removeTaskAnchorsFromFile(section: string, taskId: string, filePath: string, lineNumbers: number[]): Promise<number> {
+        try {
+            // Get workspace folder to resolve relative paths
+            const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+            if (!workspaceFolder) {
+                throw new Error('No workspace folder available');
+            }
+
+            // Handle both relative and absolute paths
+            let absolutePath: string;
+            if (path.isAbsolute(filePath)) {
+                absolutePath = filePath;
+            } else {
+                absolutePath = path.join(workspaceFolder.uri.fsPath, filePath);
+            }
+
+            const uri = vscode.Uri.file(absolutePath);
+
+            // Open the document (this will create it in memory if not already open)
+            const document = await vscode.workspace.openTextDocument(uri);
+
+            // Create task anchor patterns to match
+            const taskPatterns = [
+                // Pattern 1: With status and description: // section:task_id:status: description
+                new RegExp(`^\\s*//\\s*${section}:${taskId}:[a-zA-Z_][a-zA-Z0-9_]*:\\s+.+$`),
+                // Pattern 2: Full definition: // section:task_id: description  
+                new RegExp(`^\\s*//\\s*${section}:${taskId}:\\s+.+$`),
+                // Pattern 3: Status update: // section:task_id:status
+                new RegExp(`^\\s*//\\s*${section}:${taskId}:(todo|in_progress|inprogress|progress|done|completed|complete|blocked|block)\\s*$`, 'i'),
+                // Pattern 4: With note: // section:task_id:note
+                new RegExp(`^\\s*//\\s*${section}:${taskId}:[a-zA-Z0-9_]+\\s*$`),
+                // Pattern 5: Simple reference: // section:task_id
+                new RegExp(`^\\s*//\\s*${section}:${taskId}\\s*$`)
+            ];
+
+            // Build list of lines to remove (convert to 0-based indexing and sort in reverse order)
+            const linesToRemove = lineNumbers
+                .map(line => line - 1) // Convert from 1-based to 0-based
+                .filter(line => line >= 0 && line < document.lineCount)
+                .sort((a, b) => b - a); // Sort in reverse order to avoid index shifting
+
+            if (linesToRemove.length === 0) {
+                logCommandDebug(`No valid lines to remove in ${filePath}`);
+                return 0;
+            }
+
+            // Verify that lines actually contain task anchors before removing
+            const validLinesToRemove: number[] = [];
+            for (const lineIndex of linesToRemove) {
+                const lineText = document.lineAt(lineIndex).text;
+                const isTaskAnchor = taskPatterns.some(pattern => pattern.test(lineText.trim()));
+
+                if (isTaskAnchor) {
+                    validLinesToRemove.push(lineIndex);
+                    logCommandDebug(`Line ${lineIndex + 1} matches task anchor pattern: ${lineText.trim()}`);
+                } else {
+                    logCommandDebug(`Line ${lineIndex + 1} does not match task anchor pattern, skipping: ${lineText.trim()}`);
+                }
+            }
+
+            if (validLinesToRemove.length === 0) {
+                logCommandDebug(`No valid task anchors found to remove in ${filePath}`);
+                return 0;
+            }
+
+            // Apply edits to remove the lines
+            const editor = await vscode.window.showTextDocument(document, { preview: false, preserveFocus: true });
+
+            const success = await editor.edit(editBuilder => {
+                for (const lineIndex of validLinesToRemove) {
+                    // Remove the entire line including the line ending
+                    const line = document.lineAt(lineIndex);
+                    const range = line.rangeIncludingLineBreak;
+                    editBuilder.delete(range);
+                    logCommandDebug(`Removing line ${lineIndex + 1}: ${line.text.trim()}`);
+                }
+            });
+
+            if (success) {
+                // Save the document
+                await document.save();
+                logCommandInfo(`Successfully removed ${validLinesToRemove.length} task anchors from ${filePath}`);
+                return validLinesToRemove.length;
+            } else {
+                throw new Error('Failed to apply edits to document');
+            }
+
+        } catch (error) {
+            logCommandError(`Failed to remove task anchors from file ${filePath}`, error);
+            throw error;
+        }
+    }
+
+    /**
      * Search tasks interactively
      */
     private async searchTasks(): Promise<void> {
@@ -312,23 +652,131 @@ export class CommandHandler {
 
     /**
      * Get current task reference from cursor position
+     * Supports all task reference patterns that the backend recognizes
      */
     private async getCurrentTaskReference(): Promise<{ section: string; taskId: string } | null> {
         const editor = vscode.window.activeTextEditor;
         if (!editor) {
-            vscode.window.showErrorMessage('No active editor');
+            // Don't show error message here since this method is now used as a fallback
             return null;
         }
+
         const line = editor.document.lineAt(editor.selection.active.line);
-        const taskMatch = line.text.match(/\/\/\s*([a-zA-Z_][a-zA-Z0-9_]*):([a-zA-Z_][a-zA-Z0-9_]*)/);
-        if (!taskMatch) {
-            vscode.window.showErrorMessage('No task reference found at current line');
+        const lineText = line.text.trim();
+
+        // Pattern 1: With status and description: // section:task_id:status: description
+        let taskMatch = lineText.match(/\/\/\s*([a-zA-Z_][a-zA-Z0-9_]*):([a-zA-Z_][a-zA-Z0-9_]*):([a-zA-Z_][a-zA-Z0-9_]*):\s+(.+)/);
+        if (taskMatch) {
+            return {
+                section: taskMatch[1] || '',
+                taskId: taskMatch[2] || ''
+            };
+        }
+
+        // Pattern 2: Full definition: // section:task_id: description
+        taskMatch = lineText.match(/\/\/\s*([a-zA-Z_][a-zA-Z0-9_]*):([a-zA-Z_][a-zA-Z0-9_]*):\s+(.+)/);
+        if (taskMatch) {
+            return {
+                section: taskMatch[1] || '',
+                taskId: taskMatch[2] || ''
+            };
+        }
+
+        // Pattern 3: Status update: // section:task_id:status
+        taskMatch = lineText.match(/\/\/\s*([a-zA-Z_][a-zA-Z0-9_]*):([a-zA-Z_][a-zA-Z0-9_]*):(todo|in_progress|inprogress|progress|done|completed|complete|blocked|block)\s*$/i);
+        if (taskMatch) {
+            return {
+                section: taskMatch[1] || '',
+                taskId: taskMatch[2] || ''
+            };
+        }
+
+        // Pattern 4: With note: // section:task_id:note
+        taskMatch = lineText.match(/\/\/\s*([a-zA-Z_][a-zA-Z0-9_]*):([a-zA-Z_][a-zA-Z0-9_]*):([a-zA-Z0-9_]+)\s*$/);
+        if (taskMatch && taskMatch[3]) {
+            // Check if the third part is not a status (to distinguish from status updates)
+            const thirdPart = taskMatch[3].toLowerCase();
+            const statusKeywords = ['todo', 'in_progress', 'inprogress', 'progress', 'done', 'completed', 'complete', 'blocked', 'block'];
+            if (!statusKeywords.includes(thirdPart)) {
+                return {
+                    section: taskMatch[1] || '',
+                    taskId: taskMatch[2] || ''
+                };
+            }
+        }
+
+        // Pattern 5: Simple reference: // section:task_id
+        taskMatch = lineText.match(/\/\/\s*([a-zA-Z_][a-zA-Z0-9_]*):([a-zA-Z_][a-zA-Z0-9_]*)\s*$/);
+        if (taskMatch) {
+            return {
+                section: taskMatch[1] || '',
+                taskId: taskMatch[2] || ''
+            };
+        }
+
+        return null;
+    }
+
+    /**
+     * Let user select a task interactively from available tasks
+     */
+    private async selectTaskInteractively(prompt: string): Promise<{ section: string; taskId: string } | null> {
+        try {
+            if (!this.client.isConnected()) {
+                await this.client.connect();
+            }
+
+            const projectData = await this.client.getTasks();
+            if (!projectData || Object.keys(projectData).length === 0) {
+                vscode.window.showInformationMessage('No tasks found in the project.');
+                return null;
+            }
+
+            // Build list of all tasks
+            const taskItems: Array<{
+                label: string;
+                description: string;
+                detail: string;
+                section: string;
+                taskId: string;
+            }> = [];
+
+            for (const [sectionName, section] of Object.entries(projectData)) {
+                for (const [taskId, task] of Object.entries(section as any)) {
+                    const taskData = task as any;
+                    taskItems.push({
+                        label: `${sectionName}:${taskId}`,
+                        description: taskData.title || 'No title',
+                        detail: taskData.description || 'No description',
+                        section: sectionName,
+                        taskId: taskId
+                    });
+                }
+            }
+
+            if (taskItems.length === 0) {
+                vscode.window.showInformationMessage('No tasks found in the project.');
+                return null;
+            }
+
+            const selectedTask = await vscode.window.showQuickPick(taskItems, {
+                placeHolder: prompt,
+                matchOnDescription: true,
+                matchOnDetail: true
+            });
+
+            if (selectedTask) {
+                return {
+                    section: selectedTask.section,
+                    taskId: selectedTask.taskId
+                };
+            }
+
+            return null;
+        } catch (error) {
+            this.handleError('select task interactively', error);
             return null;
         }
-        return {
-            section: taskMatch[1] || '',
-            taskId: taskMatch[2] || ''
-        };
     }
 
     /**
@@ -347,12 +795,44 @@ export class CommandHandler {
      * Open file at specific line
      */
     private async openFileAtLine(filePath: string, line: number): Promise<void> {
-        const uri = vscode.Uri.file(filePath);
-        const document = await vscode.workspace.openTextDocument(uri);
-        const editor = await vscode.window.showTextDocument(document);
-        const position = new vscode.Position(Math.max(0, line - 1), 0);
-        editor.selection = new vscode.Selection(position, position);
-        editor.revealRange(new vscode.Range(position, position));
+        try {
+            // Get the workspace folder to resolve relative paths
+            const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+            if (!workspaceFolder) {
+                throw new Error('No workspace folder available');
+            }
+
+            // Handle both relative and absolute paths
+            let absolutePath: string;
+            if (path.isAbsolute(filePath)) {
+                absolutePath = filePath;
+            } else {
+                // Convert relative path to absolute using workspace root
+                absolutePath = path.join(workspaceFolder.uri.fsPath, filePath);
+            }
+
+            const uri = vscode.Uri.file(absolutePath);
+            const document = await vscode.workspace.openTextDocument(uri);
+            const editor = await vscode.window.showTextDocument(document);
+            const position = new vscode.Position(Math.max(0, line - 1), 0);
+            editor.selection = new vscode.Selection(position, position);
+            editor.revealRange(new vscode.Range(position, position));
+        } catch (error) {
+            // Enhanced error handling with path debugging
+            const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+            const debugInfo = {
+                originalPath: filePath,
+                workspaceRoot: workspaceFolder?.uri.fsPath || 'No workspace',
+                isAbsolute: path.isAbsolute(filePath),
+                line: line
+            };
+
+            logCommandError('Failed to open file', error, debugInfo);
+
+            vscode.window.showErrorMessage(
+                `Failed to open file: ${path.basename(filePath)}. Check if the file exists.`
+            );
+        }
     }
 
     /**
@@ -365,10 +845,31 @@ export class CommandHandler {
     /**
      * Handle errors with consistent messaging
      */
-    private handleError(operation: string, error: unknown): void {
+    private handleError(operation: string, error: unknown, context?: any): void {
         const message = error instanceof Error ? error.message : String(error);
+        const fullContext = {
+            operation,
+            timestamp: new Date().toISOString(),
+            errorType: error instanceof Error ? error.constructor.name : typeof error,
+            ...context
+        };
+
+        logCommandError(`Failed to ${operation}`, error, fullContext);
+
         vscode.window.showErrorMessage(`Failed to ${operation}: ${message}`);
         console.error(`Failed to ${operation}:`, error);
+
+        // Show additional debug information in debug mode
+        if (isDebugMode()) {
+            vscode.window.showErrorMessage(
+                `Debug: ${operation} failed. Check Anchora Commands output channel for details.`,
+                'Show Output'
+            ).then(selection => {
+                if (selection === 'Show Output') {
+                    getCommandOutputChannel().show();
+                }
+            });
+        }
     }
 
     /**
@@ -514,7 +1015,7 @@ export class CommandHandler {
         <head>
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>Anchora Task Overview</title>
+            <title>Anchora</title>
             <style>
                 body {
                     font-family: var(--vscode-font-family);
@@ -581,7 +1082,7 @@ export class CommandHandler {
         </head>
         <body>
             <div class="header">
-                <h1>📋 Anchora Task Overview</h1>
+                <h1>Anchora</h1>
                 <p>Complete overview of all tasks in your project</p>
             </div>
             
@@ -733,6 +1234,109 @@ export class CommandHandler {
 
         } catch (error) {
             this.handleError('initialize project', error);
+        }
+    }
+
+    /**
+     * Toggle debug mode on/off
+     */
+    private async toggleDebugMode(): Promise<void> {
+        try {
+            const currentMode = isDebugMode();
+            const newMode = !currentMode;
+
+            setDebugMode(newMode);
+
+            const config = vscode.workspace.getConfiguration('anchora');
+            await config.update('debugMode', newMode, vscode.ConfigurationTarget.Workspace);
+
+            const message = `Debug mode ${newMode ? 'enabled' : 'disabled'}`;
+            logCommandInfo(message);
+            vscode.window.showInformationMessage(message);
+
+            if (newMode) {
+                getCommandOutputChannel().show();
+            }
+        } catch (error) {
+            this.handleError('toggle debug mode', error);
+        }
+    }
+
+    /**
+     * Show output channels for debugging
+     */
+    private async showOutputChannel(): Promise<void> {
+        try {
+            const channels = [
+                { label: 'Anchora Commands', channel: getCommandOutputChannel() },
+                {
+                    label: 'Anchora Client', action: () => {
+                        // Import and show client channel
+                        const clientModule = require('./client');
+                        if (clientModule.getOutputChannel) {
+                            clientModule.getOutputChannel().show();
+                        }
+                    }
+                }
+            ];
+
+            const selection = await vscode.window.showQuickPick(
+                channels.map(c => c.label),
+                { placeHolder: 'Select output channel to show' }
+            );
+
+            if (selection) {
+                const selected = channels.find(c => c.label === selection);
+                if (selected) {
+                    if ('channel' in selected) {
+                        selected.channel.show();
+                    } else if ('action' in selected) {
+                        selected.action();
+                    }
+                }
+            }
+        } catch (error) {
+            this.handleError('show output channel', error);
+        }
+    }
+
+    /**
+     * Test enhanced error handling by triggering a backend error
+     */
+    private async testErrorHandling(): Promise<void> {
+        try {
+            logCommandInfo('Testing enhanced error handling...');
+
+            // Try to find a non-existent task to trigger an error
+            await this.client.findTaskReferences({
+                section: 'nonexistent_section',
+                task_id: 'nonexistent_task'
+            });
+
+        } catch (error) {
+            // This is expected - we're testing error handling
+            logCommandInfo('Error handling test completed - error was caught as expected');
+
+            if (isDebugMode()) {
+                vscode.window.showInformationMessage(
+                    'Error handling test completed. Check the output channel for enhanced error details.',
+                    'Show Output'
+                ).then(selection => {
+                    if (selection === 'Show Output') {
+                        getCommandOutputChannel().show();
+                    }
+                });
+            } else {
+                vscode.window.showInformationMessage(
+                    'Error handling test completed. Enable debug mode to see enhanced error details.',
+                    'Enable Debug',
+                    'Cancel'
+                ).then(selection => {
+                    if (selection === 'Enable Debug') {
+                        this.toggleDebugMode();
+                    }
+                });
+            }
         }
     }
 }

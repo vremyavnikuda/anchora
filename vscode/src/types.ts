@@ -1,5 +1,5 @@
 /**
- * Type definitions for Anchora Task Manager VSCode Extension
+ * Type definitions for Anchora VSCode Extension
  * Following strict TypeScript practices as per project rules
  */
 
@@ -86,6 +86,11 @@ export interface UpdateTaskStatusParams {
     readonly section: string;
     readonly task_id: string;
     readonly status: TaskStatus;
+}
+
+export interface DeleteTaskParams {
+    readonly section: string;
+    readonly task_id: string;
 }
 
 export interface FindTaskReferencesParams {

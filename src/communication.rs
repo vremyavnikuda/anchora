@@ -114,6 +114,12 @@ pub struct CreateTaskParams {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
+pub struct DeleteTaskParams {
+    pub section: String,
+    pub task_id: String,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
 pub struct FindTaskReferencesParams {
     pub section: String,
     pub task_id: String,

@@ -1,5 +1,5 @@
 /**
- * Decoration Provider for Anchora Task Manager
+ * Decoration Provider for Anchora
  * Provides visual indicators for task references in code
  */
 
@@ -66,15 +66,16 @@ export class DecorationProvider {
         const statusColors = this.config.decorationColors;
         for (const [status, color] of Object.entries(statusColors)) {
             const decorationType = vscode.window.createTextEditorDecorationType({
-                backgroundColor: `${color}20`, // 20% opacity
-                border: `3px solid ${color}`,
+                backgroundColor: color,
+                color: '#ffffff',
+                fontWeight: 'bold',
                 overviewRulerColor: color,
                 overviewRulerLane: vscode.OverviewRulerLane.Right,
                 isWholeLine: false,
                 rangeBehavior: vscode.DecorationRangeBehavior.ClosedClosed,
                 after: {
                     contentText: ` ${this.getStatusIcon(status as TaskStatus)}`,
-                    color: color,
+                    color: '#ffffff',
                     fontWeight: 'bold',
                     margin: '0 0 0 10px'
                 }
@@ -101,7 +102,6 @@ export class DecorationProvider {
      */
     private async decorateEditor(editor: vscode.TextEditor): Promise<void> {
         try {
-            // Clear existing decorations
             for (const decorationType of this.decorationTypes.values()) {
                 editor.setDecorations(decorationType, []);
             }

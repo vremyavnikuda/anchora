@@ -4,12 +4,76 @@
  */
 
 import * as vscode from 'vscode';
-import { JsonRpcClient } from './client';
+import * as path from 'path';
+import { JsonRpcClient, isDebugMode } from './client';
 import {
     TaskTreeItem,
     TaskStatus,
     ProjectData
 } from './types';
+
+let providerOutputChannel: vscode.OutputChannel | null = null;
+
+function getProviderOutputChannel(): vscode.OutputChannel {
+    if (!providerOutputChannel) {
+        providerOutputChannel = vscode.window.createOutputChannel('Anchora TaskProvider');
+    }
+    return providerOutputChannel;
+}
+
+function logProviderInfo(message: string, data?: any): void {
+    const timestamp = new Date().toISOString();
+    const logMessage = `[${timestamp}] PROVIDER: ${message}`;
+    console.log(logMessage);
+    getProviderOutputChannel().appendLine(logMessage);
+
+    if (data !== undefined && isDebugMode()) {
+        const dataStr = typeof data === 'object' ? JSON.stringify(data, null, 2) : String(data);
+        getProviderOutputChannel().appendLine(`Data: ${dataStr}`);
+        console.log('Provider data:', data);
+    }
+}
+
+function logProviderError(message: string, error?: any, context?: any): void {
+    const timestamp = new Date().toISOString();
+    const errorDetails = error ? ` - ${error instanceof Error ? error.message : String(error)}` : '';
+    const errorStack = error instanceof Error ? error.stack : '';
+    const logMessage = `[${timestamp}] PROVIDER ERROR: ${message}${errorDetails}`;
+
+    console.error(logMessage);
+    getProviderOutputChannel().appendLine(logMessage);
+
+    if (context && isDebugMode()) {
+        const contextStr = typeof context === 'object' ? JSON.stringify(context, null, 2) : String(context);
+        getProviderOutputChannel().appendLine(`Context: ${contextStr}`);
+        console.error('Error context:', context);
+    }
+
+    if (errorStack && isDebugMode()) {
+        getProviderOutputChannel().appendLine(`Stack trace: ${errorStack}`);
+        console.error('Full error object:', error);
+    }
+
+    // Always show output channel on errors in debug mode
+    if (isDebugMode()) {
+        getProviderOutputChannel().show(true);
+    }
+}
+
+function logProviderDebug(message: string, data?: any): void {
+    if (!isDebugMode()) return;
+
+    const timestamp = new Date().toISOString();
+    const logMessage = `[${timestamp}] PROVIDER DEBUG: ${message}`;
+    console.debug(logMessage);
+    getProviderOutputChannel().appendLine(logMessage);
+
+    if (data !== undefined) {
+        const dataStr = typeof data === 'object' ? JSON.stringify(data, null, 2) : String(data);
+        getProviderOutputChannel().appendLine(`Debug data: ${dataStr}`);
+        console.debug('Debug data:', data);
+    }
+}
 
 export class TaskTreeProvider implements vscode.TreeDataProvider<TaskTreeItem> {
     private _onDidChangeTreeData: vscode.EventEmitter<TaskTreeItem | undefined | null | void> = new vscode.EventEmitter<TaskTreeItem | undefined | null | void>();
@@ -21,7 +85,10 @@ export class TaskTreeProvider implements vscode.TreeDataProvider<TaskTreeItem> {
         'done': '●',
         'blocked': '◯'
     };
-    constructor(private readonly client: JsonRpcClient) { }
+
+    constructor(private readonly client: JsonRpcClient) {
+        logProviderInfo('TaskTreeProvider initialized');
+    }
     /**
      * Refresh the tree view
      */
@@ -33,13 +100,46 @@ export class TaskTreeProvider implements vscode.TreeDataProvider<TaskTreeItem> {
      * Load tasks from backend and refresh tree
      */
     async loadTasks(): Promise<void> {
+        logProviderInfo('=== Loading tasks from backend ===');
         try {
+            logProviderDebug('Checking client connection');
             if (!this.client.isConnected()) {
+                logProviderInfo('Client not connected, attempting to connect...');
                 await this.client.connect();
+                logProviderInfo('Client connected successfully');
             }
+
+            logProviderInfo('Fetching tasks from client');
+            const startTime = Date.now();
             this.projectData = await this.client.getTasks();
+            const loadTime = Date.now() - startTime;
+
+            const sectionCount = this.projectData ? Object.keys(this.projectData).length : 0;
+            let totalTasks = 0;
+            if (this.projectData) {
+                for (const section of Object.values(this.projectData)) {
+                    totalTasks += Object.keys(section).length;
+                }
+            }
+
+            logProviderInfo(`Tasks loaded successfully in ${loadTime}ms`, {
+                sections: sectionCount,
+                totalTasks,
+                loadTimeMs: loadTime
+            });
+
+            logProviderDebug('Refreshing tree view');
             this.refresh();
+            logProviderInfo('=== Task loading completed ===');
         } catch (error) {
+            const errorContext = {
+                isConnected: this.client.isConnected(),
+                hasProjectData: !!this.projectData,
+                timestamp: new Date().toISOString()
+            };
+
+            logProviderError('Failed to load tasks', error, errorContext);
+
             const message = error instanceof Error ? error.message : String(error);
             vscode.window.showErrorMessage(`Failed to load tasks: ${message}`);
             console.error('Failed to load tasks:', error);
@@ -78,11 +178,22 @@ export class TaskTreeProvider implements vscode.TreeDataProvider<TaskTreeItem> {
                 item.contextValue = 'file';
                 item.tooltip = `${element.filePath}${element.line ? `:${element.line}` : ''}`;
                 if (element.filePath) {
+                    // Handle both relative and absolute paths
+                    const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+                    let absolutePath: string;
+
+                    if (workspaceFolder && !path.isAbsolute(element.filePath)) {
+                        // Convert relative path to absolute using workspace root
+                        absolutePath = path.join(workspaceFolder.uri.fsPath, element.filePath);
+                    } else {
+                        absolutePath = element.filePath;
+                    }
+
                     item.command = {
                         command: 'vscode.open',
                         title: 'Open File',
                         arguments: [
-                            vscode.Uri.file(element.filePath),
+                            vscode.Uri.file(absolutePath),
                             {
                                 selection: element.line ? new vscode.Range(element.line - 1, 0, element.line - 1, 0) : undefined
                             }

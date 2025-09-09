@@ -1,5 +1,5 @@
 /**
- * Status Bar Manager for Anchora Task Manager
+ * Status Bar Manager for Anchora
  * Displays task statistics and context in VSCode status bar
  */
 

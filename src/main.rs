@@ -1,5 +1,6 @@
 
-use anchora::{file_parser, CreateTaskParams, FindTaskReferencesParams, GetTasksParams, JsonRpcError, JsonRpcHandler, JsonRpcRequest, JsonRpcResponse, JsonRpcServer, ScanProjectParams, ScanProjectResult, TaskParser, TaskReference, TaskStatus, UpdateTaskStatusParams};
+use anchora::{file_parser, CreateTaskParams, DeleteTaskParams, FindTaskReferencesParams, GetTasksParams, JsonRpcError, JsonRpcHandler, JsonRpcRequest, JsonRpcResponse, JsonRpcServer, ScanProjectParams, ScanProjectResult, TaskParser, TaskReference, TaskStatus, UpdateTaskStatusParams};
+use anchora::{handle_jsonrpc_method, handle_simple_method, handle_parameterized_method};
 use clap::{Arg, Command};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -170,6 +171,15 @@ impl TaskManagerHandler {
             "message": format!("Task {}:{} status updated to {}", params.section, params.task_id, params.status)
         }))
     }
+    async fn delete_task(&self, params: DeleteTaskParams) -> anyhow::Result<serde_json::Value> {
+        let mut project_data = self.storage.load_project_data().await?;
+        project_data.delete_task(&params.section, &params.task_id)?;
+        self.storage.save_project_data(&project_data).await?;
+        Ok(serde_json::json!({
+            "success": true,
+            "message": format!("Task {}:{} deleted successfully", params.section, params.task_id)
+        }))
+    }
     async fn find_task_references(&self, params: FindTaskReferencesParams) -> anyhow::Result<Vec<TaskReference>> {
         let project_data = self.storage.load_project_data().await?;
         if let Some(task) = project_data.get_task(&params.section, &params.task_id) {
@@ -194,127 +204,70 @@ impl JsonRpcHandler for TaskManagerHandler {
     fn handle_request(&self, request: JsonRpcRequest) -> std::pin::Pin<Box<dyn std::future::Future<Output = JsonRpcResponse> + Send + '_>> {
         Box::pin(async move {
             match request.method.as_str() {
-            "scan_project" => {
-                match request.params {
-                    Some(params) => {
-                        match serde_json::from_value::<ScanProjectParams>(params) {
-                            Ok(scan_params) => {
-                                match self.scan_project(scan_params).await {
-                                    Ok(result) => JsonRpcServer::success_response(
-                                        request.id,
-                                        serde_json::to_value(result).unwrap_or_default()
-                                    ),
-                                    Err(e) => JsonRpcServer::error_response(
-                                        request.id,
-                                        JsonRpcError::custom(-1, format!("Scan project failed: {}", e), None)
-                                    )
-                                }
-                            }
-                            Err(e) => JsonRpcServer::error_response(
-                                request.id,
-                                JsonRpcError::custom(-1, format!("Invalid scan_project params: {}", e), None)
-                            )
+                "scan_project" => {
+                    handle_parameterized_method!(
+                        request,
+                        ScanProjectParams,
+                        "scan_project",
+                        "Scan project for tasks",
+                        |params| self.scan_project(params)
+                    )
+                }
+                "get_tasks" => {
+                    let params = request.params.and_then(|p| serde_json::from_value(p).ok());
+                    handle_simple_method!(
+                        request.id,
+                        "get_tasks",
+                        "Retrieve project tasks",
+                        self.get_tasks(params)
+                    )
+                }
+                "create_task" => {
+                    handle_parameterized_method!(
+                        request,
+                        CreateTaskParams,
+                        "create_task",
+                        "Create new task",
+                        |params| self.create_task(params)
+                    )
+                }
+                "update_task_status" => {
+                    handle_parameterized_method!(
+                        request,
+                        UpdateTaskStatusParams,
+                        "update_task_status",
+                        "Update task status",
+                        |params| self.update_task_status(params)
+                    )
+                }
+                "delete_task" => {
+                    handle_parameterized_method!(
+                        request,
+                        DeleteTaskParams,
+                        "delete_task",
+                        "Delete task",
+                        |params| self.delete_task(params)
+                    )
+                }
+                "find_task_references" => {
+                    handle_parameterized_method!(
+                        request,
+                        FindTaskReferencesParams,
+                        "find_task_references",
+                        "Find task references",
+                        |params| async {
+                            self.find_task_references(params).await
                         }
-                    }
-                    None => JsonRpcServer::error_response(
+                    )
+                }
+                _ => {
+                    eprintln!("[ERROR] Unknown method: {}", request.method);
+                    JsonRpcServer::error_response(
                         request.id,
-                        JsonRpcError::invalid_params()
+                        JsonRpcError::method_not_found()
                     )
                 }
             }
-            "get_tasks" => {
-                let params = request.params.and_then(|p| serde_json::from_value(p).ok());
-                match self.get_tasks(params).await {
-                    Ok(result) => JsonRpcServer::success_response(request.id, result),
-                    Err(e) => JsonRpcServer::error_response(
-                        request.id,
-                        JsonRpcError::custom(-1, format!("Get tasks failed: {}", e), None)
-                    )
-                }
-            }
-            "create_task" => {
-                match request.params {
-                    Some(params) => {
-                        match serde_json::from_value::<CreateTaskParams>(params) {
-                            Ok(create_params) => {
-                                match self.create_task(create_params).await {
-                                    Ok(result) => JsonRpcServer::success_response(request.id, result),
-                                    Err(e) => JsonRpcServer::error_response(
-                                        request.id,
-                                        JsonRpcError::custom(-1, format!("Create task failed: {}", e), None)
-                                    )
-                                }
-                            }
-                            Err(e) => JsonRpcServer::error_response(
-                                request.id,
-                                JsonRpcError::custom(-1, format!("Invalid create_task params: {}", e), None)
-                            )
-                        }
-                    }
-                    None => JsonRpcServer::error_response(
-                        request.id,
-                        JsonRpcError::invalid_params()
-                    )
-                }
-            }
-            "update_task_status" => {
-                match request.params {
-                    Some(params) => {
-                        match serde_json::from_value::<UpdateTaskStatusParams>(params) {
-                            Ok(update_params) => {
-                                match self.update_task_status(update_params).await {
-                                    Ok(result) => JsonRpcServer::success_response(request.id, result),
-                                    Err(e) => JsonRpcServer::error_response(
-                                        request.id,
-                                        JsonRpcError::custom(-1, format!("Update task status failed: {}", e), None)
-                                    )
-                                }
-                            }
-                            Err(e) => JsonRpcServer::error_response(
-                                request.id,
-                                JsonRpcError::custom(-1, format!("Invalid update_task_status params: {}", e), None)
-                            )
-                        }
-                    }
-                    None => JsonRpcServer::error_response(
-                        request.id,
-                        JsonRpcError::invalid_params()
-                    )
-                }
-            }
-            "find_task_references" => {
-                match request.params {
-                    Some(params) => {
-                        match serde_json::from_value::<FindTaskReferencesParams>(params) {
-                            Ok(find_params) => {
-                                match self.find_task_references(find_params).await {
-                                    Ok(result) => JsonRpcServer::success_response(
-                                        request.id,
-                                        serde_json::to_value(result).unwrap_or_default()
-                                    ),
-                                    Err(e) => JsonRpcServer::error_response(
-                                        request.id,
-                                        JsonRpcError::custom(-1, format!("Find task references failed: {}", e), None)
-                                    )
-                                }
-                            }
-                            Err(e) => JsonRpcServer::error_response(
-                                request.id,
-                                JsonRpcError::custom(-1, format!("Invalid find_task_references params: {}", e), None)
-                            )
-                        }
-                    }
-                    None => JsonRpcServer::error_response(
-                        request.id,
-                        JsonRpcError::invalid_params()
-                    )
-                }
-            }
-            _ => JsonRpcServer::error_response(
-                request.id,
-                JsonRpcError::method_not_found()
-            )
-        }
         })
     }
 }

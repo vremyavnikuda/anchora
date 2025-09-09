@@ -1,6 +1,6 @@
 {
-  "name": "anchora-task-manager",
-  "displayName": "Anchora Task Manager",
+  "name": "anchora",
+  "displayName": "Anchora",
   "description": "Revolutionary task manager for developers that ties tasks to code, not files",
   "version": "0.1.0",
   "publisher": "anchora-team",
@@ -30,7 +30,7 @@
       "activitybar": [
         {
           "id": "anchora",
-          "title": "Anchora Task Manager",
+          "title": "Anchora",
           "icon": "$(list-selection)"
         }
       ]
@@ -51,7 +51,7 @@
       "explorer": [
         {
           "id": "anchoraTaskTreeExplorer",
-          "name": "Anchora Tasks",
+          "name": "Anchora",
           "when": "workspaceHasAnchoraProject"
         }
       ]
@@ -85,6 +85,11 @@
         "title": "Update Task Status"
       },
       {
+        "command": "anchora.deleteTask",
+        "title": "Delete Task",
+        "icon": "$(trash)"
+      },
+      {
         "command": "anchora.viewAllTaskLists",
         "title": "View All Task Lists",
         "icon": "$(list-unordered)"
@@ -113,6 +118,16 @@
         "command": "anchora.initializeProject",
         "title": "Initialize Anchora Project",
         "icon": "$(rocket)"
+      },
+      {
+        "command": "anchora.toggleDebugMode",
+        "title": "Toggle Debug Mode",
+        "icon": "$(debug)"
+      },
+      {
+        "command": "anchora.testErrorHandling",
+        "title": "Test Enhanced Error Handling",
+        "icon": "$(bug)"
       }
     ],
     "keybindings": [
@@ -145,6 +160,16 @@
         "command": "anchora.openTaskDashboard",
         "key": "ctrl+shift+d",
         "when": "anchoraExtensionActive"
+      },
+      {
+        "command": "anchora.toggleDebugMode",
+        "key": "ctrl+shift+alt+d",
+        "when": "workspaceHasAnchoraProject"
+      },
+      {
+        "command": "anchora.showOutputChannel",
+        "key": "ctrl+shift+alt+o",
+        "when": "workspaceHasAnchoraProject"
       }
     ],
     "menus": {
@@ -176,7 +201,13 @@
           "command": "anchora.showOutputChannel"
         },
         {
+          "command": "anchora.toggleDebugMode"
+        },
+        {
           "command": "anchora.initializeProject"
+        },
+        {
+          "command": "anchora.testErrorHandling"
         }
       ],
       "view/title": [
@@ -216,6 +247,11 @@
           "group": "secondary"
         },
         {
+          "command": "anchora.toggleDebugMode",
+          "when": "view == anchoraWelcome || view == anchoraTaskTree || view == anchoraTaskTreeExplorer",
+          "group": "secondary"
+        },
+        {
           "command": "anchora.initializeProject",
           "when": "view == anchoraWelcome",
           "group": "navigation"
@@ -224,16 +260,23 @@
       "view/item/context": [
         {
           "command": "anchora.updateTaskStatus",
-          "when": "(view == anchoraTaskTree || view == anchoraTaskTreeExplorer) && viewItem == task"
+          "when": "(view == anchoraTaskTree || view == anchoraTaskTreeExplorer) && viewItem == task",
+          "group": "task@1"
         },
         {
           "command": "anchora.findTaskReferences",
-          "when": "(view == anchoraTaskTree || view == anchoraTaskTreeExplorer) && viewItem == task"
+          "when": "(view == anchoraTaskTree || view == anchoraTaskTreeExplorer) && viewItem == task",
+          "group": "task@2"
+        },
+        {
+          "command": "anchora.deleteTask",
+          "when": "(view == anchoraTaskTree || view == anchoraTaskTreeExplorer) && viewItem == task",
+          "group": "task@3"
         }
       ]
     },
     "configuration": {
-      "title": "Anchora Task Manager",
+      "title": "Anchora",
       "properties": {
         "anchora.filePatterns": {
           "type": "array",
@@ -254,6 +297,11 @@
             "blocked": "#f9ca24"
           },
           "description": "Colors for task status decorations"
+        },
+        "anchora.debugMode": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable debug mode with verbose logging"
         }
       }
     }

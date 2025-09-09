@@ -269,13 +269,57 @@ async fn test_storage_backup_restore() {
     ).unwrap();
     storage.save_project_data(&project_data).await.unwrap();
     
-    // Восстановить из резервной копии
+    // Восстановить из бэкапа
     storage.restore_from_backup(&backup_path).await.unwrap();
     
-    // Проверить что данные восстановлены
+    // Проверить что данные восстановились  
     let restored_data = storage.load_project_data().await.unwrap();
-    let task = restored_data.get_task("test", "backup_task").unwrap();
-    assert_eq!(task.status, anchora::task_manager::TaskStatus::Todo); // Должен быть исходный статус
+    let restored_task = restored_data.get_task("test", "backup_task").unwrap();
+    assert_eq!(restored_task.status, anchora::task_manager::TaskStatus::Todo); // Должен быть исходный статус
     
-    println!("✅ Storage backup/restore test passed!");
+    println!("✅ Storage backup and restore test passed!");
+}
+
+#[tokio::test]
+async fn test_delete_task_integration() {
+    let temp_dir = TempDir::new().unwrap();
+    let workspace_path = temp_dir.path();
+    
+    let storage = anchora::storage::StorageManager::new(workspace_path);
+    let mut project_data = anchora::task_manager::ProjectData::new(Some("test-project".to_string()));
+    
+    // 1. Create a task
+    project_data.add_task(
+        "test", 
+        "delete_me", 
+        "Task to delete".to_string(), 
+        Some("Test description".to_string())
+    ).unwrap();
+    
+    storage.save_project_data(&project_data).await.unwrap();
+    
+    // 2. Verify task exists
+    let loaded_project = storage.load_project_data().await.unwrap();
+    assert!(loaded_project.get_task("test", "delete_me").is_some());
+    
+    // 3. Delete the task
+    let mut updated_project = loaded_project;
+    let result = updated_project.delete_task("test", "delete_me");
+    assert!(result.is_ok());
+    
+    storage.save_project_data(&updated_project).await.unwrap();
+    
+    // 4. Verify task is gone
+    let final_project = storage.load_project_data().await.unwrap();
+    assert!(final_project.get_task("test", "delete_me").is_none());
+    
+    // 5. Test error cases
+    let mut error_project = final_project;
+    let result = error_project.delete_task("test", "nonexistent");
+    assert!(result.is_err());
+    
+    let result = error_project.delete_task("nonexistent", "any");
+    assert!(result.is_err());
+    
+    println!("✅ Delete integration test passed!");
 }

@@ -16,12 +16,14 @@ import {
     GetTasksParams,
     CreateTaskParams,
     UpdateTaskStatusParams,
+    DeleteTaskParams,
     FindTaskReferencesParams,
     TaskReference,
     ProjectData
 } from './types';
 
 let clientOutputChannel: vscode.OutputChannel | null = null;
+let debugMode = false;
 
 function getOutputChannel(): vscode.OutputChannel {
     if (!clientOutputChannel) {
@@ -30,19 +32,126 @@ function getOutputChannel(): vscode.OutputChannel {
     return clientOutputChannel;
 }
 
+export function setDebugMode(enabled: boolean): void {
+    debugMode = enabled;
+    if (enabled) {
+        logClientInfo('Debug mode enabled');
+        getOutputChannel().show();
+    }
+}
+
+export function isDebugMode(): boolean {
+    return debugMode;
+}
+
 function logClientInfo(message: string): void {
     const timestamp = new Date().toISOString();
     const logMessage = `[${timestamp}] CLIENT: ${message}`;
     console.log(logMessage);
     getOutputChannel().appendLine(logMessage);
+
+    if (debugMode) {
+        console.trace('Client Info Stack:', message);
+    }
 }
 
 function logClientError(message: string, error?: any): void {
     const timestamp = new Date().toISOString();
-    const errorDetails = error ? ` - ${error instanceof Error ? error.message : String(error)}` : '';
+    let errorDetails = '';
+    let errorStack = '';
+
+    if (error) {
+        if (error instanceof Error) {
+            errorDetails = ` - ${error.message}`;
+            errorStack = error.stack || '';
+        } else if (typeof error === 'object') {
+            // Handle enhanced error from backend
+            if (error.code && error.message && error.data) {
+                errorDetails = ` - [${error.code}] ${error.message}`;
+
+                if (debugMode && error.data) {
+                    const enhancedData = error.data;
+                    getOutputChannel().appendLine(`Enhanced Error Details:`);
+
+                    if (enhancedData.operation) {
+                        getOutputChannel().appendLine(`  Operation: ${enhancedData.operation}`);
+                    }
+
+                    if (enhancedData.location) {
+                        const loc = enhancedData.location;
+                        getOutputChannel().appendLine(`  Location: ${loc.file}:${loc.line}:${loc.column} in ${loc.function}`);
+                    }
+
+                    if (enhancedData.method) {
+                        getOutputChannel().appendLine(`  Method: ${enhancedData.method}`);
+                    }
+
+                    if (enhancedData.timestamp) {
+                        getOutputChannel().appendLine(`  Timestamp: ${enhancedData.timestamp}`);
+                    }
+
+                    if (enhancedData.error_source) {
+                        getOutputChannel().appendLine(`  Error Source: ${enhancedData.error_source}`);
+                    }
+
+                    if (enhancedData.error_chain) {
+                        getOutputChannel().appendLine(`  Error Chain: ${enhancedData.error_chain}`);
+                    }
+
+                    if (enhancedData.additional_data && Object.keys(enhancedData.additional_data).length > 0) {
+                        getOutputChannel().appendLine(`  Additional Data: ${JSON.stringify(enhancedData.additional_data, null, 2)}`);
+                    }
+                }
+            } else {
+                errorDetails = ` - ${String(error)}`;
+            }
+        } else {
+            errorDetails = ` - ${String(error)}`;
+        }
+    }
+
     const logMessage = `[${timestamp}] CLIENT ERROR: ${message}${errorDetails}`;
+
     console.error(logMessage);
     getOutputChannel().appendLine(logMessage);
+
+    if (errorStack && debugMode) {
+        getOutputChannel().appendLine(`Stack trace: ${errorStack}`);
+        console.error('Full error object:', error);
+    }
+
+    // Always show output channel on errors in debug mode
+    if (debugMode) {
+        getOutputChannel().show(true);
+    }
+}
+
+function logClientDebug(message: string, data?: any): void {
+    if (!debugMode) return;
+
+    const timestamp = new Date().toISOString();
+    const logMessage = `[${timestamp}] CLIENT DEBUG: ${message}`;
+    console.debug(logMessage);
+    getOutputChannel().appendLine(logMessage);
+
+    if (data !== undefined) {
+        const dataStr = typeof data === 'object' ? JSON.stringify(data, null, 2) : String(data);
+        getOutputChannel().appendLine(`Data: ${dataStr}`);
+        console.debug('Debug data:', data);
+    }
+}
+
+function logClientWarning(message: string, data?: any): void {
+    const timestamp = new Date().toISOString();
+    const logMessage = `[${timestamp}] CLIENT WARNING: ${message}`;
+    console.warn(logMessage);
+    getOutputChannel().appendLine(logMessage);
+
+    if (data !== undefined && debugMode) {
+        const dataStr = typeof data === 'object' ? JSON.stringify(data, null, 2) : String(data);
+        getOutputChannel().appendLine(`Warning data: ${dataStr}`);
+        console.warn('Warning data:', data);
+    }
 }
 
 export class JsonRpcClient {
@@ -64,27 +173,46 @@ export class JsonRpcClient {
      * Start the backend process and establish connection
      */
     async connect(): Promise<void> {
+        logClientInfo('=== Starting backend connection process ===');
         try {
             const executablePath = this.binaryPath ?? this.getDefaultBinaryPath();
             logClientInfo(`Attempting to start backend process: ${executablePath}`);
             logClientInfo(`Workspace path: ${this.workspacePath}`);
+            logClientDebug('Spawn arguments', {
+                executable: executablePath,
+                args: ['--workspace', this.workspacePath, '--mode', 'server'],
+                stdio: ['pipe', 'pipe', 'pipe']
+            });
+
             this.process = spawn(executablePath, [
                 '--workspace', this.workspacePath,
                 '--mode', 'server'
             ], {
                 stdio: ['pipe', 'pipe', 'pipe']
             });
+
             if (!this.process.stdout || !this.process.stdin || !this.process.stderr) {
-                throw new BackendConnectionError('Failed to establish stdio pipes with backend process');
+                const error = new BackendConnectionError('Failed to establish stdio pipes with backend process');
+                logClientError('Stdio pipes not available', {
+                    stdout: !!this.process.stdout,
+                    stdin: !!this.process.stdin,
+                    stderr: !!this.process.stderr
+                });
+                throw error;
             }
+
             logClientInfo('Backend process started, setting up handlers...');
+            logClientDebug('Process PID', this.process.pid);
+
             this.setupProcessHandlers();
             this.setupResponseHandler();
+
             logClientInfo('Waiting for process to be ready...');
             await this.waitForProcessReady();
-            logClientInfo('Backend connection established successfully');
+
+            logClientInfo('=== Backend connection established successfully ===');
         } catch (error) {
-            logClientError('Failed to connect to backend', error);
+            logClientError('=== Failed to connect to backend ===', error);
             throw new BackendConnectionError(
                 `Failed to start backend process: ${error instanceof Error ? error.message : String(error)}`
             );
@@ -95,14 +223,23 @@ export class JsonRpcClient {
      * Disconnect from the backend process
      */
     async disconnect(): Promise<void> {
+        logClientInfo('=== Starting backend disconnection process ===');
         if (this.process) {
-            for (const [, request] of this.pendingRequests) {
+            logClientDebug('Cleaning up pending requests', { pendingCount: this.pendingRequests.size });
+
+            for (const [id, request] of this.pendingRequests) {
                 clearTimeout(request.timeout);
                 request.reject(new BackendConnectionError('Connection closed'));
+                logClientDebug(`Cancelled pending request ${id}`);
             }
             this.pendingRequests.clear();
+
+            logClientInfo(`Killing backend process (PID: ${this.process.pid})`);
             this.process.kill();
             this.process = null;
+            logClientInfo('=== Backend disconnection completed ===');
+        } else {
+            logClientInfo('No backend process to disconnect');
         }
     }
 
@@ -146,6 +283,14 @@ export class JsonRpcClient {
     }
 
     /**
+     * Delete a task
+     */
+    async deleteTask(params: DeleteTaskParams): Promise<{ success: boolean; message: string }> {
+        const response = await this.sendRequest('delete_task', params);
+        return response as { success: boolean; message: string };
+    }
+
+    /**
      * Find all references to a task
      */
     async findTaskReferences(params: FindTaskReferencesParams): Promise<ReadonlyArray<TaskReference>> {
@@ -157,9 +302,14 @@ export class JsonRpcClient {
      * Send a JSON-RPC request to the backend
      */
     private async sendRequest(method: string, params?: unknown): Promise<unknown> {
+        logClientDebug(`=== Sending ${method} request ===`);
+
         if (!this.isConnected()) {
-            throw new BackendConnectionError('Not connected to backend');
+            const error = new BackendConnectionError('Not connected to backend');
+            logClientError('Cannot send request - not connected', { method, connected: false });
+            throw error;
         }
+
         const id = ++this.requestId;
         const request: JsonRpcRequest = {
             jsonrpc: '2.0',
@@ -167,21 +317,31 @@ export class JsonRpcClient {
             params,
             id
         };
+
         logClientInfo(`Sending request: ${method} (id: ${id})`);
+        logClientDebug('Request details', { method, id, params, hasParams: params !== undefined });
+
         return new Promise((resolve, reject) => {
             const timeout = setTimeout(() => {
                 this.pendingRequests.delete(id);
-                logClientError(`Request timeout for method: ${method}`);
-                reject(new JsonRpcClientError(`Request timeout for method: ${method}`));
+                const timeoutError = new JsonRpcClientError(`Request timeout for method: ${method}`);
+                logClientError(`Request timeout for method: ${method}`, { id, method, timeoutMs: this.REQUEST_TIMEOUT });
+                reject(timeoutError);
             }, this.REQUEST_TIMEOUT);
+
             this.pendingRequests.set(id, { resolve, reject, timeout });
+            logClientDebug('Request queued', { id, pendingCount: this.pendingRequests.size });
+
             try {
                 const requestJson = JSON.stringify(request) + '\n';
+                logClientDebug('Sending JSON', { json: requestJson.trim(), length: requestJson.length });
+
                 this.process!.stdin!.write(requestJson);
+                logClientDebug(`Request ${id} sent successfully`);
             } catch (error) {
                 clearTimeout(timeout);
                 this.pendingRequests.delete(id);
-                logClientError('Failed to send request', error);
+                logClientError('Failed to send request', { error, method, id });
                 reject(new BackendConnectionError(
                     `Failed to send request: ${error instanceof Error ? error.message : String(error)}`
                 ));
@@ -206,7 +366,15 @@ export class JsonRpcClient {
         });
 
         this.process.stderr?.on('data', (data: Buffer) => {
-            logClientError('Backend stderr', data.toString());
+            const message = data.toString().trim();
+            // Only log stderr as error if it's not a debug message from the backend
+            if (message.startsWith('[DEBUG]')) {
+                if (debugMode) {
+                    logClientDebug('Backend debug message', { message });
+                }
+            } else {
+                logClientError('Backend stderr', { message });
+            }
         });
     }
 
@@ -234,29 +402,83 @@ export class JsonRpcClient {
      * Handle incoming JSON-RPC response
      */
     private handleResponse(responseJson: string): void {
+        logClientDebug('=== Handling JSON-RPC response ===', {
+            responseLength: responseJson.length,
+            response: responseJson.substring(0, 200) + (responseJson.length > 200 ? '...' : '')
+        });
+
+        // Filter out non-JSON messages from backend stdout
+        // JSON-RPC messages should always start with '{' and contain 'jsonrpc'
+        if (!responseJson.startsWith('{') || !responseJson.includes('"jsonrpc"')) {
+            logClientDebug('Ignoring non-JSON-RPC message from backend stdout', {
+                message: responseJson,
+                reason: 'Not a JSON-RPC response'
+            });
+            return;
+        }
+
         try {
             const response = JSON.parse(responseJson) as JsonRpcResponse;
+            logClientDebug('Parsed response', {
+                id: response.id,
+                hasResult: !!response.result,
+                hasError: !!response.error
+            });
+
             if (response.id === null || response.id === undefined) {
+                logClientWarning('Received response without ID - ignoring', { response });
                 return;
             }
+
             const id = typeof response.id === 'string' ? parseInt(response.id, 10) : response.id;
             const pendingRequest = this.pendingRequests.get(id);
+
             if (!pendingRequest) {
-                console.warn(`Received response for unknown request ID: ${id}`);
+                logClientWarning(`Received response for unknown request ID: ${id}`, {
+                    id,
+                    pendingRequests: Array.from(this.pendingRequests.keys())
+                });
                 return;
             }
+
             clearTimeout(pendingRequest.timeout);
             this.pendingRequests.delete(id);
+            logClientDebug(`Removed request ${id} from pending queue`, {
+                remainingPending: this.pendingRequests.size
+            });
+
             if (response.error) {
-                pendingRequest.reject(new JsonRpcClientError(
+                const rpcError = new JsonRpcClientError(
                     `JSON-RPC error: ${response.error.message}`,
                     response.error
-                ));
+                );
+
+                // Enhanced error logging for our unified error handling
+                logClientError(`JSON-RPC error for request ${id}`, response.error);
+
+                // Special handling for enhanced errors with debug data
+                if (debugMode && response.error.data) {
+                    logClientInfo(`Enhanced error data available for debugging`);
+                }
+
+                pendingRequest.reject(rpcError);
             } else {
+                logClientDebug(`Request ${id} completed successfully`, {
+                    hasResult: !!response.result
+                });
                 pendingRequest.resolve(response.result);
             }
         } catch (error) {
-            console.error('Failed to parse JSON-RPC response:', error, 'Raw response:', responseJson);
+            logClientError('Failed to parse JSON-RPC response', {
+                error: error instanceof Error ? error.message : String(error),
+                rawResponse: responseJson,
+                responseLength: responseJson.length,
+                errorType: error instanceof Error ? error.constructor.name : typeof error
+            });
+
+            if (debugMode) {
+                console.error('Failed to parse JSON-RPC response:', error, 'Raw response:', responseJson);
+            }
         }
     }
 
