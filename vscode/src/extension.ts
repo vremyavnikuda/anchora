@@ -8,6 +8,7 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import { JsonRpcClient } from './client';
 import { TaskTreeProvider } from './taskProvider';
+import { NoteTreeProvider } from './noteProvider';
 import { CommandHandler } from './commands';
 import { DecorationProvider } from './decorations';
 import { StatusBarManager } from './statusBar';
@@ -88,13 +89,18 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         const client = new JsonRpcClient(workspacePath, binaryPath);
         logInfo('Initializing providers and managers...');
         const taskProvider = new TaskTreeProvider(client);
+        const noteProvider = new NoteTreeProvider(client);
         const welcomeProvider = new WelcomeViewProvider();
-        const commandHandler = new CommandHandler(client, taskProvider, context);
+        const commandHandler = new CommandHandler(client, taskProvider, noteProvider, context);
         const decorationProvider = new DecorationProvider(taskProvider, config);
         const statusBarManager = new StatusBarManager(taskProvider);
         logInfo('Registering tree data providers...');
         const treeView = vscode.window.createTreeView('anchoraTaskTree', {
             treeDataProvider: taskProvider,
+            showCollapseAll: true
+        });
+        const noteTreeView = vscode.window.createTreeView('anchoraNoteTree', {
+            treeDataProvider: noteProvider,
             showCollapseAll: true
         });
         const explorerTreeView = vscode.window.createTreeView('anchoraTaskTreeExplorer', {
@@ -113,6 +119,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         statusBarManager.register(context);
         context.subscriptions.push(
             treeView,
+            noteTreeView,
             explorerTreeView,
             welcomeView,
             vscode.workspace.createFileSystemWatcher(
@@ -138,6 +145,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
                 logInfo('Backend connected successfully');
                 logInfo('Loading tasks...');
                 await taskProvider.loadTasks();
+                logInfo('Loading notes...');
+                noteProvider.refresh();
                 logInfo('Refreshing decorations...');
                 decorationProvider.refreshDecorations();
                 logInfo('Refreshing status bar...');
@@ -226,6 +235,7 @@ async function initializeAnchoraProject(workspacePath: string): Promise<void> {
                 project_name: path.basename(workspacePath)
             },
             sections: {},
+            notes: {},
             index: {
                 files: {},
                 tasks_by_status: {

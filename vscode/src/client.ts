@@ -19,7 +19,12 @@ import {
     DeleteTaskParams,
     FindTaskReferencesParams,
     TaskReference,
-    ProjectData
+    ProjectData,
+    Note,
+    CreateNoteParams,
+    CreateNoteResponse,
+    GenerateLinkResponse,
+    BasicResponse
 } from './types';
 
 let clientOutputChannel: vscode.OutputChannel | null = null;
@@ -65,39 +70,30 @@ function logClientError(message: string, error?: any): void {
             errorDetails = ` - ${error.message}`;
             errorStack = error.stack || '';
         } else if (typeof error === 'object') {
-            // Handle enhanced error from backend
             if (error.code && error.message && error.data) {
                 errorDetails = ` - [${error.code}] ${error.message}`;
-
                 if (debugMode && error.data) {
                     const enhancedData = error.data;
                     getOutputChannel().appendLine(`Enhanced Error Details:`);
-
                     if (enhancedData.operation) {
                         getOutputChannel().appendLine(`  Operation: ${enhancedData.operation}`);
                     }
-
                     if (enhancedData.location) {
                         const loc = enhancedData.location;
                         getOutputChannel().appendLine(`  Location: ${loc.file}:${loc.line}:${loc.column} in ${loc.function}`);
                     }
-
                     if (enhancedData.method) {
                         getOutputChannel().appendLine(`  Method: ${enhancedData.method}`);
                     }
-
                     if (enhancedData.timestamp) {
                         getOutputChannel().appendLine(`  Timestamp: ${enhancedData.timestamp}`);
                     }
-
                     if (enhancedData.error_source) {
                         getOutputChannel().appendLine(`  Error Source: ${enhancedData.error_source}`);
                     }
-
                     if (enhancedData.error_chain) {
                         getOutputChannel().appendLine(`  Error Chain: ${enhancedData.error_chain}`);
                     }
-
                     if (enhancedData.additional_data && Object.keys(enhancedData.additional_data).length > 0) {
                         getOutputChannel().appendLine(`  Additional Data: ${JSON.stringify(enhancedData.additional_data, null, 2)}`);
                     }
@@ -109,18 +105,13 @@ function logClientError(message: string, error?: any): void {
             errorDetails = ` - ${String(error)}`;
         }
     }
-
     const logMessage = `[${timestamp}] CLIENT ERROR: ${message}${errorDetails}`;
-
     console.error(logMessage);
     getOutputChannel().appendLine(logMessage);
-
     if (errorStack && debugMode) {
         getOutputChannel().appendLine(`Stack trace: ${errorStack}`);
         console.error('Full error object:', error);
     }
-
-    // Always show output channel on errors in debug mode
     if (debugMode) {
         getOutputChannel().show(true);
     }
@@ -128,12 +119,10 @@ function logClientError(message: string, error?: any): void {
 
 function logClientDebug(message: string, data?: any): void {
     if (!debugMode) return;
-
     const timestamp = new Date().toISOString();
     const logMessage = `[${timestamp}] CLIENT DEBUG: ${message}`;
     console.debug(logMessage);
     getOutputChannel().appendLine(logMessage);
-
     if (data !== undefined) {
         const dataStr = typeof data === 'object' ? JSON.stringify(data, null, 2) : String(data);
         getOutputChannel().appendLine(`Data: ${dataStr}`);
@@ -146,7 +135,6 @@ function logClientWarning(message: string, data?: any): void {
     const logMessage = `[${timestamp}] CLIENT WARNING: ${message}`;
     console.warn(logMessage);
     getOutputChannel().appendLine(logMessage);
-
     if (data !== undefined && debugMode) {
         const dataStr = typeof data === 'object' ? JSON.stringify(data, null, 2) : String(data);
         getOutputChannel().appendLine(`Warning data: ${dataStr}`);
@@ -163,7 +151,6 @@ export class JsonRpcClient {
         timeout: ReturnType<typeof setTimeout>;
     }>();
     private readonly REQUEST_TIMEOUT = 30000;
-
     constructor(
         private readonly workspacePath: string,
         private readonly binaryPath?: string
@@ -183,14 +170,12 @@ export class JsonRpcClient {
                 args: ['--workspace', this.workspacePath, '--mode', 'server'],
                 stdio: ['pipe', 'pipe', 'pipe']
             });
-
             this.process = spawn(executablePath, [
                 '--workspace', this.workspacePath,
                 '--mode', 'server'
             ], {
                 stdio: ['pipe', 'pipe', 'pipe']
             });
-
             if (!this.process.stdout || !this.process.stdin || !this.process.stderr) {
                 const error = new BackendConnectionError('Failed to establish stdio pipes with backend process');
                 logClientError('Stdio pipes not available', {
@@ -200,16 +185,12 @@ export class JsonRpcClient {
                 });
                 throw error;
             }
-
             logClientInfo('Backend process started, setting up handlers...');
             logClientDebug('Process PID', this.process.pid);
-
             this.setupProcessHandlers();
             this.setupResponseHandler();
-
             logClientInfo('Waiting for process to be ready...');
             await this.waitForProcessReady();
-
             logClientInfo('=== Backend connection established successfully ===');
         } catch (error) {
             logClientError('=== Failed to connect to backend ===', error);
@@ -226,14 +207,12 @@ export class JsonRpcClient {
         logClientInfo('=== Starting backend disconnection process ===');
         if (this.process) {
             logClientDebug('Cleaning up pending requests', { pendingCount: this.pendingRequests.size });
-
             for (const [id, request] of this.pendingRequests) {
                 clearTimeout(request.timeout);
                 request.reject(new BackendConnectionError('Connection closed'));
                 logClientDebug(`Cancelled pending request ${id}`);
             }
             this.pendingRequests.clear();
-
             logClientInfo(`Killing backend process (PID: ${this.process.pid})`);
             this.process.kill();
             this.process = null;
@@ -251,65 +230,15 @@ export class JsonRpcClient {
     }
 
     /**
-     * Scan project for tasks
-     */
-    async scanProject(params: ScanProjectParams): Promise<ScanProjectResult> {
-        const response = await this.sendRequest('scan_project', params);
-        return response as ScanProjectResult;
-    }
-
-    /**
-     * Get all tasks or filtered tasks
-     */
-    async getTasks(params?: GetTasksParams): Promise<ProjectData['sections']> {
-        const response = await this.sendRequest('get_tasks', params);
-        return response as ProjectData['sections'];
-    }
-
-    /**
-     * Create a new task
-     */
-    async createTask(params: CreateTaskParams): Promise<{ success: boolean; message: string }> {
-        const response = await this.sendRequest('create_task', params);
-        return response as { success: boolean; message: string };
-    }
-
-    /**
-     * Update task status
-     */
-    async updateTaskStatus(params: UpdateTaskStatusParams): Promise<{ success: boolean; message: string }> {
-        const response = await this.sendRequest('update_task_status', params);
-        return response as { success: boolean; message: string };
-    }
-
-    /**
-     * Delete a task
-     */
-    async deleteTask(params: DeleteTaskParams): Promise<{ success: boolean; message: string }> {
-        const response = await this.sendRequest('delete_task', params);
-        return response as { success: boolean; message: string };
-    }
-
-    /**
-     * Find all references to a task
-     */
-    async findTaskReferences(params: FindTaskReferencesParams): Promise<ReadonlyArray<TaskReference>> {
-        const response = await this.sendRequest('find_task_references', params);
-        return response as ReadonlyArray<TaskReference>;
-    }
-
-    /**
      * Send a JSON-RPC request to the backend
      */
     private async sendRequest(method: string, params?: unknown): Promise<unknown> {
         logClientDebug(`=== Sending ${method} request ===`);
-
         if (!this.isConnected()) {
             const error = new BackendConnectionError('Not connected to backend');
             logClientError('Cannot send request - not connected', { method, connected: false });
             throw error;
         }
-
         const id = ++this.requestId;
         const request: JsonRpcRequest = {
             jsonrpc: '2.0',
@@ -317,10 +246,8 @@ export class JsonRpcClient {
             params,
             id
         };
-
         logClientInfo(`Sending request: ${method} (id: ${id})`);
         logClientDebug('Request details', { method, id, params, hasParams: params !== undefined });
-
         return new Promise((resolve, reject) => {
             const timeout = setTimeout(() => {
                 this.pendingRequests.delete(id);
@@ -328,14 +255,11 @@ export class JsonRpcClient {
                 logClientError(`Request timeout for method: ${method}`, { id, method, timeoutMs: this.REQUEST_TIMEOUT });
                 reject(timeoutError);
             }, this.REQUEST_TIMEOUT);
-
             this.pendingRequests.set(id, { resolve, reject, timeout });
             logClientDebug('Request queued', { id, pendingCount: this.pendingRequests.size });
-
             try {
                 const requestJson = JSON.stringify(request) + '\n';
                 logClientDebug('Sending JSON', { json: requestJson.trim(), length: requestJson.length });
-
                 this.process!.stdin!.write(requestJson);
                 logClientDebug(`Request ${id} sent successfully`);
             } catch (error) {
@@ -354,17 +278,14 @@ export class JsonRpcClient {
      */
     private setupProcessHandlers(): void {
         if (!this.process) return;
-
         this.process.on('error', (error: Error) => {
             logClientError('Backend process error', error);
             this.handleProcessError(error);
         });
-
         this.process.on('exit', (code: number | null, signal: string | null) => {
             logClientInfo(`Backend process exited with code ${code}, signal ${signal}`);
             this.handleProcessExit();
         });
-
         this.process.stderr?.on('data', (data: Buffer) => {
             const message = data.toString().trim();
             // Only log stderr as error if it's not a debug message from the backend
@@ -406,9 +327,6 @@ export class JsonRpcClient {
             responseLength: responseJson.length,
             response: responseJson.substring(0, 200) + (responseJson.length > 200 ? '...' : '')
         });
-
-        // Filter out non-JSON messages from backend stdout
-        // JSON-RPC messages should always start with '{' and contain 'jsonrpc'
         if (!responseJson.startsWith('{') || !responseJson.includes('"jsonrpc"')) {
             logClientDebug('Ignoring non-JSON-RPC message from backend stdout', {
                 message: responseJson,
@@ -416,7 +334,6 @@ export class JsonRpcClient {
             });
             return;
         }
-
         try {
             const response = JSON.parse(responseJson) as JsonRpcResponse;
             logClientDebug('Parsed response', {
@@ -424,15 +341,12 @@ export class JsonRpcClient {
                 hasResult: !!response.result,
                 hasError: !!response.error
             });
-
             if (response.id === null || response.id === undefined) {
                 logClientWarning('Received response without ID - ignoring', { response });
                 return;
             }
-
             const id = typeof response.id === 'string' ? parseInt(response.id, 10) : response.id;
             const pendingRequest = this.pendingRequests.get(id);
-
             if (!pendingRequest) {
                 logClientWarning(`Received response for unknown request ID: ${id}`, {
                     id,
@@ -440,27 +354,20 @@ export class JsonRpcClient {
                 });
                 return;
             }
-
             clearTimeout(pendingRequest.timeout);
             this.pendingRequests.delete(id);
             logClientDebug(`Removed request ${id} from pending queue`, {
                 remainingPending: this.pendingRequests.size
             });
-
             if (response.error) {
                 const rpcError = new JsonRpcClientError(
                     `JSON-RPC error: ${response.error.message}`,
                     response.error
                 );
-
-                // Enhanced error logging for our unified error handling
                 logClientError(`JSON-RPC error for request ${id}`, response.error);
-
-                // Special handling for enhanced errors with debug data
                 if (debugMode && response.error.data) {
                     logClientInfo(`Enhanced error data available for debugging`);
                 }
-
                 pendingRequest.reject(rpcError);
             } else {
                 logClientDebug(`Request ${id} completed successfully`, {
@@ -475,7 +382,6 @@ export class JsonRpcClient {
                 responseLength: responseJson.length,
                 errorType: error instanceof Error ? error.constructor.name : typeof error
             });
-
             if (debugMode) {
                 console.error('Failed to parse JSON-RPC response:', error, 'Raw response:', responseJson);
             }
@@ -524,5 +430,47 @@ export class JsonRpcClient {
             'anchora'
         ];
         return possiblePaths[0] || 'anchora';
+    }
+
+    // API Methods
+    async scanProject(params: ScanProjectParams): Promise<ScanProjectResult> {
+        return await this.sendRequest('scan_project', params) as ScanProjectResult;
+    }
+
+    async getTasks(params?: GetTasksParams): Promise<ProjectData> {
+        return await this.sendRequest('get_tasks', params) as ProjectData;
+    }
+
+    async createTask(params: CreateTaskParams): Promise<{ success: boolean; message: string }> {
+        return await this.sendRequest('create_task', params) as { success: boolean; message: string };
+    }
+
+    async updateTaskStatus(params: UpdateTaskStatusParams): Promise<{ success: boolean; message: string }> {
+        return await this.sendRequest('update_task_status', params) as { success: boolean; message: string };
+    }
+
+    async deleteTask(params: DeleteTaskParams): Promise<{ success: boolean; message: string }> {
+        return await this.sendRequest('delete_task', params) as { success: boolean; message: string };
+    }
+
+    async findTaskReferences(params: FindTaskReferencesParams): Promise<ReadonlyArray<TaskReference>> {
+        return await this.sendRequest('find_task_references', params) as ReadonlyArray<TaskReference>;
+    }
+
+    // Note Management API Methods
+    async createNote(params: CreateNoteParams): Promise<CreateNoteResponse> {
+        return await this.sendRequest('create_note', params) as CreateNoteResponse;
+    }
+
+    async getNotes(): Promise<ReadonlyArray<Note>> {
+        return await this.sendRequest('get_notes') as ReadonlyArray<Note>;
+    }
+
+    async generateTaskLink(noteId: string): Promise<GenerateLinkResponse> {
+        return await this.sendRequest('generate_task_link', { note_id: noteId }) as GenerateLinkResponse;
+    }
+
+    async deleteNote(noteId: string): Promise<BasicResponse> {
+        return await this.sendRequest('delete_note', { note_id: noteId }) as BasicResponse;
     }
 }

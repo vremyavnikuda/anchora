@@ -1,5 +1,4 @@
-
-use anchora::{file_parser, CreateTaskParams, DeleteTaskParams, FindTaskReferencesParams, GetTasksParams, JsonRpcError, JsonRpcHandler, JsonRpcRequest, JsonRpcResponse, JsonRpcServer, ScanProjectParams, ScanProjectResult, TaskParser, TaskReference, TaskStatus, UpdateTaskStatusParams};
+use anchora::{file_parser, CreateTaskParams, DeleteTaskParams, FindTaskReferencesParams, GetTasksParams, JsonRpcError, JsonRpcHandler, JsonRpcRequest, JsonRpcResponse, JsonRpcServer, ScanProjectParams, ScanProjectResult, TaskParser, TaskReference, TaskStatus, UpdateTaskStatusParams, CreateNoteParams, CreateNoteResponse, GenerateLinkParams, DeleteNoteParams, GenerateLinkResponse, BasicResponse, Note};
 use anchora::{handle_jsonrpc_method, handle_simple_method, handle_parameterized_method};
 use clap::{Arg, Command};
 use std::path::PathBuf;
@@ -139,7 +138,7 @@ impl TaskManagerHandler {
     }
     async fn get_tasks(&self, _params: Option<GetTasksParams>) -> anyhow::Result<serde_json::Value> {
         let project_data = self.storage.load_project_data().await?;
-        Ok(serde_json::to_value(&project_data.sections)?)
+        Ok(serde_json::to_value(&project_data)?)
     }
     async fn create_task(&self, params: CreateTaskParams) -> anyhow::Result<serde_json::Value> {
         let mut project_data = self.storage.load_project_data().await?;
@@ -197,6 +196,59 @@ impl TaskManagerHandler {
         } else {
             Err(anyhow::anyhow!("Task not found: {}:{}", params.section, params.task_id))
         }
+    }
+
+    async fn create_note(&self, params: CreateNoteParams) -> anyhow::Result<CreateNoteResponse> {
+        let mut project_data = self.storage.load_project_data().await?;
+        let suggested_status = if let Some(status_str) = params.suggested_status {
+            match status_str.to_lowercase().as_str() {
+                "todo" => Some(TaskStatus::Todo),
+                "in_progress" | "inprogress" => Some(TaskStatus::InProgress),
+                "done" | "completed" => Some(TaskStatus::Done),
+                "blocked" => Some(TaskStatus::Blocked),
+                _ => return Err(anyhow::anyhow!("Invalid status: {}", status_str)),
+            }
+        } else {
+            None
+        };
+        let note_id = project_data.add_note(
+            params.title.clone(),
+            params.content,
+            params.section,
+            params.suggested_task_id,
+            suggested_status,
+        )?;
+        self.storage.save_project_data(&project_data).await?;
+        Ok(CreateNoteResponse {
+            success: true,
+            message: format!("Note '{}' created successfully", params.title),
+            note_id,
+        })
+    }
+
+    async fn get_notes(&self) -> anyhow::Result<Vec<Note>> {
+        let project_data = self.storage.load_project_data().await?;
+        Ok(project_data.get_all_notes().into_iter().cloned().collect())
+    }
+
+    async fn generate_task_link(&self, note_id: String) -> anyhow::Result<GenerateLinkResponse> {
+        let mut project_data = self.storage.load_project_data().await?;
+        let link = project_data.generate_note_link(&note_id)?;
+        self.storage.save_project_data(&project_data).await?;
+        Ok(GenerateLinkResponse {
+            success: true,
+            link,
+        })
+    }
+
+    async fn delete_note(&self, note_id: String) -> anyhow::Result<BasicResponse> {
+        let mut project_data = self.storage.load_project_data().await?;
+        project_data.delete_note(&note_id)?;
+        self.storage.save_project_data(&project_data).await?;
+        Ok(BasicResponse {
+            success: true,
+            message: "Note deleted successfully".to_string(),
+        })
     }
 }
 
@@ -260,6 +312,41 @@ impl JsonRpcHandler for TaskManagerHandler {
                         }
                     )
                 }
+                "create_note" => {
+                    handle_parameterized_method!(
+                        request,
+                        CreateNoteParams,
+                        "create_note",
+                        "Create new note",
+                        |params| self.create_note(params)
+                    )
+                }
+                "get_notes" => {
+                    handle_simple_method!(
+                        request.id,
+                        "get_notes",
+                        "Retrieve all notes",
+                        self.get_notes()
+                    )
+                }
+                "generate_task_link" => {
+                    handle_parameterized_method!(
+                        request,
+                        GenerateLinkParams,
+                        "generate_task_link",
+                        "Generate task link for note",
+                        |params| self.generate_task_link(params.note_id)
+                    )
+                }
+                "delete_note" => {
+                    handle_parameterized_method!(
+                        request,
+                        DeleteNoteParams,
+                        "delete_note",
+                        "Delete note",
+                        |params| self.delete_note(params.note_id)
+                    )
+                }
                 _ => {
                     eprintln!("[ERROR] Unknown method: {}", request.method);
                     JsonRpcServer::error_response(
@@ -294,7 +381,6 @@ async fn main() -> anyhow::Result<()> {
                 .default_value("server")
         )
         .get_matches();
-
     let workspace_path = PathBuf::from(
         matches.get_one::<String>("workspace")
             .expect("Workspace path is required")
@@ -332,6 +418,5 @@ async fn main() -> anyhow::Result<()> {
             std::process::exit(1);
         }
     }
-
     Ok(())
 }

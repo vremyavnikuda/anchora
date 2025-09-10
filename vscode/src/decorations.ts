@@ -113,7 +113,6 @@ export class DecorationProvider {
             }
             let match;
             this.taskReferenceRegex.lastIndex = 0;
-
             while ((match = this.taskReferenceRegex.exec(text)) !== null) {
                 const section = match[1];
                 const taskId = match[2];

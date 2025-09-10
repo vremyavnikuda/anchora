@@ -26,7 +26,6 @@ function logProviderInfo(message: string, data?: any): void {
     const logMessage = `[${timestamp}] PROVIDER: ${message}`;
     console.log(logMessage);
     getProviderOutputChannel().appendLine(logMessage);
-
     if (data !== undefined && isDebugMode()) {
         const dataStr = typeof data === 'object' ? JSON.stringify(data, null, 2) : String(data);
         getProviderOutputChannel().appendLine(`Data: ${dataStr}`);
@@ -39,22 +38,17 @@ function logProviderError(message: string, error?: any, context?: any): void {
     const errorDetails = error ? ` - ${error instanceof Error ? error.message : String(error)}` : '';
     const errorStack = error instanceof Error ? error.stack : '';
     const logMessage = `[${timestamp}] PROVIDER ERROR: ${message}${errorDetails}`;
-
     console.error(logMessage);
     getProviderOutputChannel().appendLine(logMessage);
-
     if (context && isDebugMode()) {
         const contextStr = typeof context === 'object' ? JSON.stringify(context, null, 2) : String(context);
         getProviderOutputChannel().appendLine(`Context: ${contextStr}`);
         console.error('Error context:', context);
     }
-
     if (errorStack && isDebugMode()) {
         getProviderOutputChannel().appendLine(`Stack trace: ${errorStack}`);
         console.error('Full error object:', error);
     }
-
-    // Always show output channel on errors in debug mode
     if (isDebugMode()) {
         getProviderOutputChannel().show(true);
     }
@@ -62,12 +56,10 @@ function logProviderError(message: string, error?: any, context?: any): void {
 
 function logProviderDebug(message: string, data?: any): void {
     if (!isDebugMode()) return;
-
     const timestamp = new Date().toISOString();
     const logMessage = `[${timestamp}] PROVIDER DEBUG: ${message}`;
     console.debug(logMessage);
     getProviderOutputChannel().appendLine(logMessage);
-
     if (data !== undefined) {
         const dataStr = typeof data === 'object' ? JSON.stringify(data, null, 2) : String(data);
         getProviderOutputChannel().appendLine(`Debug data: ${dataStr}`);
@@ -85,10 +77,10 @@ export class TaskTreeProvider implements vscode.TreeDataProvider<TaskTreeItem> {
         'done': '●',
         'blocked': '◯'
     };
-
     constructor(private readonly client: JsonRpcClient) {
         logProviderInfo('TaskTreeProvider initialized');
     }
+
     /**
      * Refresh the tree view
      */
@@ -108,12 +100,21 @@ export class TaskTreeProvider implements vscode.TreeDataProvider<TaskTreeItem> {
                 await this.client.connect();
                 logProviderInfo('Client connected successfully');
             }
-
             logProviderInfo('Fetching tasks from client');
             const startTime = Date.now();
-            this.projectData = await this.client.getTasks();
+            const projectData = await this.client.getTasks();
+            if (!projectData) {
+                logProviderError('No project data received from backend');
+                this.projectData = null;
+                return;
+            }
+            if (!projectData.sections) {
+                logProviderError('Project data missing sections field', null, { projectData });
+                this.projectData = null;
+                return;
+            }
+            this.projectData = projectData.sections;
             const loadTime = Date.now() - startTime;
-
             const sectionCount = this.projectData ? Object.keys(this.projectData).length : 0;
             let totalTasks = 0;
             if (this.projectData) {
@@ -121,13 +122,11 @@ export class TaskTreeProvider implements vscode.TreeDataProvider<TaskTreeItem> {
                     totalTasks += Object.keys(section).length;
                 }
             }
-
             logProviderInfo(`Tasks loaded successfully in ${loadTime}ms`, {
                 sections: sectionCount,
                 totalTasks,
                 loadTimeMs: loadTime
             });
-
             logProviderDebug('Refreshing tree view');
             this.refresh();
             logProviderInfo('=== Task loading completed ===');
@@ -137,9 +136,7 @@ export class TaskTreeProvider implements vscode.TreeDataProvider<TaskTreeItem> {
                 hasProjectData: !!this.projectData,
                 timestamp: new Date().toISOString()
             };
-
             logProviderError('Failed to load tasks', error, errorContext);
-
             const message = error instanceof Error ? error.message : String(error);
             vscode.window.showErrorMessage(`Failed to load tasks: ${message}`);
             console.error('Failed to load tasks:', error);
@@ -178,17 +175,13 @@ export class TaskTreeProvider implements vscode.TreeDataProvider<TaskTreeItem> {
                 item.contextValue = 'file';
                 item.tooltip = `${element.filePath}${element.line ? `:${element.line}` : ''}`;
                 if (element.filePath) {
-                    // Handle both relative and absolute paths
                     const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
                     let absolutePath: string;
-
                     if (workspaceFolder && !path.isAbsolute(element.filePath)) {
-                        // Convert relative path to absolute using workspace root
                         absolutePath = path.join(workspaceFolder.uri.fsPath, element.filePath);
                     } else {
                         absolutePath = element.filePath;
                     }
-
                     item.command = {
                         command: 'vscode.open',
                         title: 'Open File',

@@ -23,8 +23,53 @@ export interface JsonRpcError {
     readonly data?: unknown;
 }
 
-// Task Management Types
 export type TaskStatus = 'todo' | 'in_progress' | 'done' | 'blocked';
+
+export interface Note {
+    readonly id: string;
+    readonly title: string;
+    readonly content: string;
+    readonly section: string;
+    readonly suggested_task_id: string;
+    readonly suggested_status: TaskStatus;
+    readonly created: string;
+    readonly updated: string;
+    readonly is_converted: boolean;
+    readonly converted_at?: string;
+    readonly generated_link?: string;
+}
+
+export interface CreateNoteParams {
+    readonly title: string;
+    readonly content: string;
+    readonly section: string;
+    readonly suggested_task_id: string;
+    readonly suggested_status?: TaskStatus;
+}
+
+export interface GenerateLinkParams {
+    readonly note_id: string;
+}
+
+export interface DeleteNoteParams {
+    readonly note_id: string;
+}
+
+export interface CreateNoteResponse {
+    readonly success: boolean;
+    readonly message: string;
+    readonly note_id: string;
+}
+
+export interface GenerateLinkResponse {
+    readonly success: boolean;
+    readonly link: string;
+}
+
+export interface BasicResponse {
+    readonly success: boolean;
+    readonly message: string;
+}
 
 export interface TaskFile {
     readonly lines: ReadonlyArray<number>;
@@ -35,8 +80,8 @@ export interface Task {
     readonly title: string;
     readonly description?: string;
     readonly status: TaskStatus;
-    readonly created: string; // ISO 8601 date
-    readonly updated: string; // ISO 8601 date
+    readonly created: string;
+    readonly updated: string;
     readonly files: Record<string, TaskFile>;
 }
 
@@ -56,9 +101,9 @@ export interface ProjectData {
         readonly files: Record<string, ReadonlyArray<string>>;
         readonly tasks_by_status: Record<TaskStatus, ReadonlyArray<string>>;
     };
+    readonly notes?: Record<string, Note>;
 }
 
-// Request/Response Parameter Types
 export interface ScanProjectParams {
     readonly workspace_path: string;
     readonly file_patterns?: ReadonlyArray<string>;
@@ -104,7 +149,6 @@ export interface TaskReference {
     readonly note?: string;
 }
 
-// VSCode Extension Types
 export interface TaskTreeItem {
     readonly type: 'section' | 'task' | 'file';
     readonly label: string;
@@ -122,7 +166,6 @@ export interface ExtensionConfig {
     readonly decorationColors: Record<TaskStatus, string>;
 }
 
-// Error Types
 export class AnchoraError extends Error {
     constructor(message: string, public readonly code?: number) {
         super(message);
@@ -144,7 +187,6 @@ export class BackendConnectionError extends AnchoraError {
     }
 }
 
-// Utility types for strict typing
 export type NonEmptyString = string & { readonly __brand: 'NonEmptyString' };
 export type FilePath = string & { readonly __brand: 'FilePath' };
 export type TaskId = string & { readonly __brand: 'TaskId' };

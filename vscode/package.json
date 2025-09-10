@@ -38,6 +38,11 @@
     "views": {
       "anchora": [
         {
+          "id": "anchoraNoteTree",
+          "name": "Notes",
+          "when": "workspaceHasAnchoraProject"
+        },
+        {
           "id": "anchoraTaskTree",
           "name": "Tasks",
           "when": "workspaceHasAnchoraProject"
@@ -128,11 +133,36 @@
         "command": "anchora.testErrorHandling",
         "title": "Test Enhanced Error Handling",
         "icon": "$(bug)"
+      },
+      {
+        "command": "anchora.createNote",
+        "title": "Create New Note",
+        "icon": "$(add)"
+      },
+      {
+        "command": "anchora.refreshNotes",
+        "title": "Refresh Notes",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "anchora.generateTaskLink",
+        "title": "Generate Task Link",
+        "icon": "$(link)"
+      },
+      {
+        "command": "anchora.viewNote",
+        "title": "View Note",
+        "icon": "$(eye)"
+      },
+      {
+        "command": "anchora.deleteNote",
+        "title": "Delete Note",
+        "icon": "$(trash)"
       }
     ],
     "keybindings": [
       {
-        "command": "anchora.createTask",
+        "command": "anchora.createNote",
         "key": "ctrl+shift+t",
         "when": "workspaceHasAnchoraProject"
       },
@@ -208,9 +238,27 @@
         },
         {
           "command": "anchora.testErrorHandling"
+        },
+        {
+          "command": "anchora.createNote",
+          "when": "workspaceHasAnchoraProject"
+        },
+        {
+          "command": "anchora.refreshNotes",
+          "when": "workspaceHasAnchoraProject"
         }
       ],
       "view/title": [
+        {
+          "command": "anchora.createNote",
+          "when": "view == anchoraNoteTree",
+          "group": "navigation"
+        },
+        {
+          "command": "anchora.refreshNotes",
+          "when": "view == anchoraNoteTree",
+          "group": "navigation"
+        },
         {
           "command": "anchora.createTask",
           "when": "view == anchoraTaskTree || view == anchoraTaskTreeExplorer",
@@ -258,6 +306,21 @@
         }
       ],
       "view/item/context": [
+        {
+          "command": "anchora.generateTaskLink",
+          "when": "view == anchoraNoteTree && viewItem == note",
+          "group": "note@1"
+        },
+        {
+          "command": "anchora.viewNote",
+          "when": "view == anchoraNoteTree && viewItem != convertedNote",
+          "group": "note@2"
+        },
+        {
+          "command": "anchora.deleteNote",
+          "when": "view == anchoraNoteTree && (viewItem == note || viewItem == convertedNote || viewItem == noteWithLink)",
+          "group": "note@3"
+        },
         {
           "command": "anchora.updateTaskStatus",
           "when": "(view == anchoraTaskTree || view == anchoraTaskTreeExplorer) && viewItem == task",

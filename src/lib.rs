@@ -6,7 +6,7 @@ pub mod file_watcher;
 pub mod error_macros;
 
 pub use task_manager::{
-    Task, TaskStatus, ProjectData, TaskSection, TaskIndex, ProjectMeta, TaskFile
+    Task, TaskStatus, ProjectData, TaskSection, TaskIndex, ProjectMeta, TaskFile, Note
 };
 
 pub use file_parser::{
@@ -20,7 +20,9 @@ pub use storage::{
 pub use communication::{
     JsonRpcRequest, JsonRpcResponse, JsonRpcError, JsonRpcHandler, JsonRpcServer, JsonRpcClient,
     ScanProjectParams, ScanProjectResult, GetTasksParams, UpdateTaskStatusParams,
-    CreateTaskParams, DeleteTaskParams, FindTaskReferencesParams, TaskReference
+    CreateTaskParams, DeleteTaskParams, FindTaskReferencesParams, TaskReference,
+    CreateNoteParams, CreateNoteResponse, GenerateLinkParams, DeleteNoteParams, 
+    GenerateLinkResponse, BasicResponse
 };
 
 pub use file_watcher::{

@@ -59,7 +59,6 @@ pub fn create_enhanced_error(
     error_code: i32,
 ) -> JsonRpcError {
     let error_message = format!("{}: {}", context.operation, error);
-    
     let debug_data = json!({
         "operation": context.operation,
         "error_source": error.to_string(),
@@ -74,7 +73,6 @@ pub fn create_enhanced_error(
         "timestamp": chrono::Utc::now().to_rfc3339(),
         "additional_data": context.additional_data
     });
-
     JsonRpcError::custom(error_code, error_message, Some(debug_data))
 }
 
@@ -96,13 +94,9 @@ macro_rules! handle_jsonrpc_method {
         )
         .with_method($method_name)
         .with_request_id($request_id.clone());
-
         match $result {
             Ok(value) => {
-                // Log successful operation in debug mode
                 eprintln!("[DEBUG] Operation '{}' completed successfully", $operation);
-                
-                // Convert to JSON Value if not already
                 let json_value = match serde_json::to_value(&value) {
                     Ok(v) => v,
                     Err(e) => {
@@ -110,16 +104,12 @@ macro_rules! handle_jsonrpc_method {
                         serde_json::Value::Null
                     }
                 };
-                
                 $crate::communication::JsonRpcServer::success_response($request_id, json_value)
             }
             Err(error) => {
                 let enhanced_error = $crate::error_macros::create_enhanced_error(&error, &context, -1);
-                
-                // Log error details for debugging
                 eprintln!("[ERROR] Operation '{}' failed: {}", $operation, error);
                 eprintln!("[ERROR] Context: {}:{} in {}", file!(), line!(), module_path!());
-                
                 $crate::communication::JsonRpcServer::error_response($request_id, enhanced_error)
             }
         }
@@ -144,12 +134,9 @@ macro_rules! parse_params {
                         )
                         .with_method($method_name)
                         .with_request_id($request_id.clone());
-
                         let error = anyhow::anyhow!("Parameter parsing failed: {}", e);
                         let enhanced_error = $crate::error_macros::create_enhanced_error(&error, &context, -32602);
-                        
                         eprintln!("[ERROR] Parameter parsing failed for {}: {}", $method_name, e);
-                        
                         return $crate::communication::JsonRpcServer::error_response($request_id, enhanced_error);
                     }
                 }
@@ -206,12 +193,9 @@ macro_rules! handle_parameterized_method {
                         )
                         .with_method($method_name)
                         .with_request_id($request.id.clone());
-
                         let error = anyhow::anyhow!("Parameter parsing failed: {}", e);
                         let enhanced_error = $crate::error_macros::create_enhanced_error(&error, &context, -32602);
-                        
                         eprintln!("[ERROR] Parameter parsing failed for {}: {}", $method_name, e);
-                        
                         $crate::communication::JsonRpcServer::error_response($request.id, enhanced_error)
                     }
                 }
@@ -233,9 +217,6 @@ pub fn log_error_to_debug_channel(
     error: &anyhow::Error,
     context: &ErrorContext,
 ) {
-    // This could be extended to send errors to the VSCode extension via a debug channel
-    // For now, we use structured logging that can be captured by the extension
-    
     let structured_log = json!({
         "level": "ERROR",
         "timestamp": chrono::Utc::now().to_rfc3339(),
@@ -249,8 +230,6 @@ pub fn log_error_to_debug_channel(
         },
         "debug_data": context.additional_data
     });
-    
-    // Output structured JSON that can be parsed by VSCode extension
     eprintln!("ANCHORA_DEBUG: {}", structured_log);
 }
 
@@ -283,7 +262,6 @@ mod tests {
         let context = ErrorContext::new("test_operation", "test.rs", 42, 10, "test_module")
             .with_method("test_method")
             .with_data("param1", "value1");
-
         assert_eq!(context.operation, "test_operation");
         assert_eq!(context.file, "test.rs");
         assert_eq!(context.line, 42);
@@ -296,20 +274,16 @@ mod tests {
     fn test_enhanced_error_creation() {
         let error = anyhow::anyhow!("Test error");
         let context = ErrorContext::new("test_operation", "test.rs", 42, 10, "test_module");
-        
         let json_error = create_enhanced_error(&error, &context, -1000);
-        
         assert_eq!(json_error.code, -1000);
         assert!(json_error.message.contains("test_operation"));
         assert!(json_error.data.is_some());
-        
         if let Some(data) = json_error.data {
             assert!(data.get("location").is_some());
             assert!(data.get("timestamp").is_some());
         }
     }
 
-    // Mock test for macro functionality
     fn mock_successful_operation() -> Result<serde_json::Value> {
         Ok(json!({"success": true}))
     }
@@ -339,10 +313,8 @@ mod tests {
             "test_operation",
             mock_failing_operation()
         );
-
         assert!(response.result.is_none());
         assert!(response.error.is_some());
-        
         if let Some(error) = response.error {
             assert_eq!(error.code, -1);
             assert!(error.message.contains("test_operation"));

@@ -132,6 +132,45 @@ pub struct TaskReference {
     pub note: Option<String>,
 }
 
+// Note-related types
+#[derive(Debug, Deserialize, Serialize)]
+pub struct CreateNoteParams {
+    pub title: String,
+    pub content: String,
+    pub section: String,
+    pub suggested_task_id: String,
+    pub suggested_status: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct CreateNoteResponse {
+    pub success: bool,
+    pub message: String,
+    pub note_id: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct GenerateLinkParams {
+    pub note_id: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct DeleteNoteParams {
+    pub note_id: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct GenerateLinkResponse {
+    pub success: bool,
+    pub link: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct BasicResponse {
+    pub success: bool,
+    pub message: String,
+}
+
 pub trait JsonRpcHandler: Send + Sync {
     fn handle_request(&self, request: JsonRpcRequest) -> std::pin::Pin<Box<dyn std::future::Future<Output = JsonRpcResponse> + Send + '_>>;
 }
@@ -150,14 +189,11 @@ impl JsonRpcServer {
         let mut stdout = tokio::io::stdout();
         let mut reader = BufReader::new(stdin);
         let mut line = String::new();
-
         println!("JSON-RPC server started on stdin/stdout");
-
         loop {
             line.clear();
             match reader.read_line(&mut line).await {
                 Ok(0) => {
-                    // EOF достигнут
                     println!("JSON-RPC server shutting down");
                     break;
                 }
@@ -166,10 +202,8 @@ impl JsonRpcServer {
                     if line.is_empty() {
                         continue;
                     }
-
                     let response = self.process_line(line).await;
                     let response_json = serde_json::to_string(&response)?;
-                    
                     stdout.write_all(response_json.as_bytes()).await?;
                     stdout.write_all(b"\n").await?;
                     stdout.flush().await?;
@@ -185,7 +219,6 @@ impl JsonRpcServer {
     }
 
     async fn process_line(&self, line: &str) -> JsonRpcResponse {
-        // Попытаться разобрать JSON
         let request: JsonRpcRequest = match serde_json::from_str(line) {
             Ok(req) => req,
             Err(_) => {
@@ -197,7 +230,6 @@ impl JsonRpcServer {
                 };
             }
         };
-
         if request.jsonrpc != JSONRPC_VERSION {
             return JsonRpcResponse {
                 jsonrpc: JSONRPC_VERSION.to_string(),
@@ -206,7 +238,6 @@ impl JsonRpcServer {
                 id: request.id,
             };
         }
-
         self.handler.handle_request(request).await
     }
 
@@ -238,12 +269,10 @@ impl JsonRpcClient {
     pub fn new() -> (Self, mpsc::UnboundedSender<String>, mpsc::UnboundedReceiver<String>) {
         let (request_tx, request_rx) = mpsc::unbounded_channel();
         let (response_tx, response_rx) = mpsc::unbounded_channel();
-
         let client = Self {
             tx: request_tx,
             rx: response_rx,
         };
-
         (client, response_tx, request_rx)
     }
 
@@ -254,10 +283,8 @@ impl JsonRpcClient {
             params,
             id: Some(Value::Number(serde_json::Number::from(1))),
         };
-
         let request_json = serde_json::to_string(&request)?;
         self.tx.send(request_json)?;
-
         Ok(())
     }
 
@@ -284,10 +311,8 @@ mod tests {
             })),
             id: Some(Value::Number(serde_json::Number::from(1))),
         };
-
         let json = serde_json::to_string(&request).unwrap();
         let parsed: JsonRpcRequest = serde_json::from_str(&json).unwrap();
-        
         assert_eq!(parsed.method, "scan_project");
         assert_eq!(parsed.jsonrpc, "2.0");
     }
@@ -303,10 +328,8 @@ mod tests {
             error: None,
             id: Some(Value::Number(serde_json::Number::from(1))),
         };
-
         let json = serde_json::to_string(&response).unwrap();
         let parsed: JsonRpcResponse = serde_json::from_str(&json).unwrap();
-        
         assert!(parsed.result.is_some());
         assert!(parsed.error.is_none());
     }

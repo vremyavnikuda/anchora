@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 use chrono::{DateTime, Utc};
+use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub enum TaskStatus {
@@ -13,6 +14,72 @@ pub enum TaskStatus {
     #[serde(rename = "blocked")]
     Blocked,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Note {
+    pub id: String,
+    pub title: String,
+    pub content: String,
+    pub section: String,
+    pub suggested_task_id: String,
+    pub suggested_status: TaskStatus,
+    pub created: DateTime<Utc>,
+    pub updated: DateTime<Utc>,
+    pub is_converted: bool,
+    pub converted_at: Option<DateTime<Utc>>,
+    pub generated_link: Option<String>,
+}
+
+impl Note {
+    pub fn new(
+        title: String,
+        content: String,
+        section: String,
+        suggested_task_id: String,
+        suggested_status: Option<TaskStatus>,
+    ) -> Self {
+        let now = Utc::now();
+        Self {
+            id: Uuid::new_v4().to_string(),
+            title,
+            content,
+            section,
+            suggested_task_id,
+            suggested_status: suggested_status.unwrap_or(TaskStatus::Todo),
+            created: now,
+            updated: now,
+            is_converted: false,
+            converted_at: None,
+            generated_link: None,
+        }
+    }
+
+    pub fn generate_task_link(&mut self) -> String {
+        let status_str = match self.suggested_status {
+            TaskStatus::Todo => "todo",
+            TaskStatus::InProgress => "in_progress",
+            TaskStatus::Done => "done",
+            TaskStatus::Blocked => "blocked",
+        };
+        let link = format!(
+            "// {}:{}:{}: {}",
+            self.section,
+            self.suggested_task_id,
+            status_str,
+            self.title
+        );
+        self.generated_link = Some(link.clone());
+        self.updated = Utc::now();
+        link
+    }
+
+    pub fn mark_as_converted(&mut self) {
+        self.is_converted = true;
+        self.converted_at = Some(Utc::now());
+        self.updated = Utc::now();
+    }
+}
+
 impl Default for TaskStatus {
     fn default() -> Self {
         TaskStatus::Todo
@@ -77,12 +144,14 @@ pub struct TaskIndex {
 }
 
 impl TaskIndex {
+
     pub fn new() -> Self {
         Self {
             files: HashMap::new(),
             tasks_by_status: HashMap::new(),
         }
     }
+
     pub fn update_task(&mut self, section: &str, task_id: &str, task: &Task) {
         let full_task_id = format!("{}.{}", section, task_id);
         for file_path in task.files.keys() {
@@ -96,6 +165,7 @@ impl TaskIndex {
             .or_insert_with(Vec::new)
             .push(full_task_id);
     }
+
     pub fn clear(&mut self) {
         self.files.clear();
         self.tasks_by_status.clear();
@@ -127,6 +197,8 @@ pub struct ProjectData {
     pub meta: ProjectMeta,
     pub sections: HashMap<String, TaskSection>,
     pub index: TaskIndex,
+    #[serde(default)]
+    pub notes: HashMap<String, Note>,
 }
 
 impl ProjectData {
@@ -137,8 +209,10 @@ impl ProjectData {
             meta,
             sections: HashMap::new(),
             index: TaskIndex::new(),
+            notes: HashMap::new(),
         }
     }
+
     pub fn add_task(&mut self, section: &str, task_id: &str, title: String, description: Option<String>) -> anyhow::Result<()> {
         let task = Task::new(title, description);
         self.sections
@@ -179,30 +253,19 @@ impl ProjectData {
     }
 
     pub fn delete_task(&mut self, section: &str, task_id: &str) -> anyhow::Result<()> {
-        // Check if task exists
         if !self.sections.contains_key(section) {
             return Err(anyhow::anyhow!("Section not found: {}", section));
         }
-        
         let section_tasks = self.sections.get_mut(section).unwrap();
         if !section_tasks.contains_key(task_id) {
             return Err(anyhow::anyhow!("Task not found: {}:{}", section, task_id));
         }
-        
-        // Remove the task
         section_tasks.remove(task_id);
-        
-        // If section is now empty, remove it
         if section_tasks.is_empty() {
             self.sections.remove(section);
         }
-        
-        // Update metadata
         self.meta.last_updated = Utc::now();
-        
-        // Rebuild index to ensure consistency
         self.rebuild_index();
-        
         Ok(())
     }
 
@@ -213,6 +276,119 @@ impl ProjectData {
                 self.index.update_task(section_name, task_id, task);
             }
         }
+    }
+
+    pub fn add_note(
+        &mut self,
+        title: String,
+        content: String,
+        section: String,
+        suggested_task_id: String,
+        suggested_status: Option<TaskStatus>,
+    ) -> anyhow::Result<String> {
+        let note = Note::new(title, content, section, suggested_task_id, suggested_status);
+        let note_id = note.id.clone();
+        if self.notes.contains_key(&note_id) {
+            return Err(anyhow::anyhow!("Note with ID '{}' already exists", note_id));
+        }
+        self.notes.insert(note_id.clone(), note);
+        self.meta.last_updated = Utc::now();
+        Ok(note_id)
+    }
+
+    pub fn get_note(&self, id: &str) -> Option<&Note> {
+        self.notes.get(id)
+    }
+
+    pub fn get_note_mut(&mut self, id: &str) -> Option<&mut Note> {
+        self.notes.get_mut(id)
+    }
+
+    pub fn update_note(
+        &mut self,
+        id: &str,
+        title: Option<String>,
+        content: Option<String>,
+    ) -> anyhow::Result<()> {
+        let note = self.notes.get_mut(id)
+            .ok_or_else(|| anyhow::anyhow!("Note with ID '{}' not found", id))?;
+        if let Some(title) = title {
+            note.title = title;
+        }
+        if let Some(content) = content {
+            note.content = content;
+        }
+        note.updated = Utc::now();
+        self.meta.last_updated = Utc::now();
+        Ok(())
+    }
+
+    pub fn delete_note(&mut self, id: &str) -> anyhow::Result<()> {
+        if !self.notes.contains_key(id) {
+            return Err(anyhow::anyhow!("Note with ID '{}' not found", id));
+        }
+        self.notes.remove(id);
+        self.meta.last_updated = Utc::now();
+        Ok(())
+    }
+
+    pub fn generate_note_link(&mut self, note_id: &str) -> anyhow::Result<String> {
+        let note = self.notes.get_mut(note_id)
+            .ok_or_else(|| anyhow::anyhow!("Note with ID '{}' not found", note_id))?;
+        if note.is_converted {
+            return Err(anyhow::anyhow!("Note is already converted to task"));
+        }
+        let link = note.generate_task_link();
+        self.meta.last_updated = Utc::now();
+        Ok(link)
+    }
+
+    pub fn convert_note_to_task(&mut self, note_id: &str) -> anyhow::Result<()> {
+        let note = self.notes.get(note_id)
+            .ok_or_else(|| anyhow::anyhow!("Note with ID '{}' not found", note_id))?;
+        if note.is_converted {
+            return Err(anyhow::anyhow!("Note is already converted to task"));
+        }
+        let note_clone = note.clone();
+        let task = Task::new(note_clone.title, Some(note_clone.content));
+        self.sections
+            .entry(note_clone.section.clone())
+            .or_insert_with(HashMap::new)
+            .insert(note_clone.suggested_task_id.clone(), task.clone());
+        if let Some(task) = self.get_task_mut(&note_clone.section, &note_clone.suggested_task_id) {
+            task.update_status(note_clone.suggested_status);
+        }
+        if let Some(note) = self.notes.get_mut(note_id) {
+            note.mark_as_converted();
+        }
+        self.meta.last_updated = Utc::now();
+        self.rebuild_index();
+        Ok(())
+    }
+
+    pub fn get_all_notes(&self) -> Vec<&Note> {
+        self.notes.values().collect()
+    }
+
+    pub fn check_note_conversions(&mut self, scanned_content: &[(String, String)]) -> anyhow::Result<Vec<String>> {
+        let mut converted_notes = Vec::new();
+        for (note_id, note) in self.notes.clone() {
+            if note.is_converted || note.generated_link.is_none() {
+                continue;
+            }
+            let generated_link = note.generated_link.as_ref().unwrap();
+            for (_, content) in scanned_content {
+                if content.contains(generated_link) {
+                    if let Err(e) = self.convert_note_to_task(&note_id) {
+                        eprintln!("Error converting note to task: {}", e);
+                    } else {
+                        converted_notes.push(note_id.clone());
+                    }
+                    break;
+                }
+            }
+        }
+        Ok(converted_notes)
     }
 }
 
@@ -238,20 +414,12 @@ mod tests {
     #[test]
     fn test_delete_task() {
         let mut project = ProjectData::new(Some("test-project".to_string()));
-        
-        // Add a task
         project.add_task("dev", "task_1", "Test task".to_string(), None).unwrap();
         assert!(project.get_task("dev", "task_1").is_some());
-        
-        // Delete the task
         project.delete_task("dev", "task_1").unwrap();
         assert!(project.get_task("dev", "task_1").is_none());
-        
-        // Try to delete non-existent task
         let result = project.delete_task("dev", "task_1");
         assert!(result.is_err());
-        
-        // Try to delete from non-existent section
         let result = project.delete_task("nonexistent", "task_1");
         assert!(result.is_err());
     }

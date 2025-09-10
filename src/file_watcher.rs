@@ -60,7 +60,6 @@ impl FileWatcher {
         config: WatcherConfig,
     ) -> anyhow::Result<(Self, mpsc::UnboundedReceiver<FileEvent>)> {
         let (event_tx, event_rx) = mpsc::unbounded_channel();
-
         let tx_clone = event_tx.clone();
         let mut watcher = RecommendedWatcher::new(
             move |res: Result<Event, notify::Error>| {
@@ -138,14 +137,12 @@ impl FileWatcher {
                 }
             }
         }
-
         false
     }
     fn matches_pattern(file_name: &str, pattern: &str) -> bool {
         if pattern == "**/*" {
             return true;
         }
-
         if pattern.starts_with("**/") {
             let suffix = &pattern[3..];
             if suffix.starts_with("*.") {
@@ -153,7 +150,6 @@ impl FileWatcher {
                 return file_name.ends_with(&format!(".{}", extension));
             }
         }
-
         if pattern.starts_with("*.") {
             let extension = &pattern[2..];
             return file_name.ends_with(&format!(".{}", extension));
@@ -230,8 +226,7 @@ mod tests {
         let test_file = temp_dir.path().join("test.rs");
         fs::write(&test_file, "fn main() {}").unwrap();
         let (tx, _rx) = mpsc::unbounded_channel();
-        let dummy_watcher = RecommendedWatcher::new(|_| {}, Config::default()).unwrap();
-        
+        let dummy_watcher = RecommendedWatcher::new(|_| {}, Config::default()).unwrap();     
         let file_watcher = FileWatcher {
             config,
             _event_tx: tx,

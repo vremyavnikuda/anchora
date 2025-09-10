@@ -7,6 +7,7 @@ pub struct StorageManager {
 }
 
 impl StorageManager {
+
     pub fn new(workspace_path: &Path) -> Self {
         let anchora_dir = workspace_path.join(".anchora");
         let tasks_file = anchora_dir.join("tasks.json");
@@ -16,6 +17,7 @@ impl StorageManager {
             tasks_file,
         }
     }
+
     pub async fn initialize(&self) -> anyhow::Result<()> {
         if !self.anchora_dir.exists() {
             async_fs::create_dir_all(&self.anchora_dir).await?;
@@ -23,9 +25,9 @@ impl StorageManager {
         }
         Ok(())
     }
+
     pub async fn load_project_data(&self) -> anyhow::Result<ProjectData> {
         if !self.tasks_file.exists() {
-            // Если файл не существует, создать новый проект
             let project_name = self.anchora_dir
                 .parent()
                 .and_then(|p| p.file_name())
@@ -39,6 +41,7 @@ impl StorageManager {
         println!("Loaded project data from: {:?}", self.tasks_file);
         Ok(project_data)
     }
+
     pub async fn save_project_data(&self, project_data: &ProjectData) -> anyhow::Result<()> {
         self.initialize().await?;
         let json_content = serde_json::to_string_pretty(project_data)?;
@@ -46,6 +49,7 @@ impl StorageManager {
         println!("Saved project data to: {:?}", self.tasks_file);
         Ok(())
     }
+
     pub async fn create_backup(&self) -> anyhow::Result<PathBuf> {
         if !self.tasks_file.exists() {
             return Err(anyhow::anyhow!("Tasks file does not exist"));
@@ -57,6 +61,7 @@ impl StorageManager {
         println!("Created backup: {:?}", backup_path);
         Ok(backup_path)
     }
+
     pub async fn list_backups(&self) -> anyhow::Result<Vec<PathBuf>> {
         let mut backups = Vec::new();
         if !self.anchora_dir.exists() {
@@ -74,6 +79,7 @@ impl StorageManager {
         backups.sort();
         Ok(backups)
     }
+
     pub async fn cleanup_old_backups(&self, keep_count: usize) -> anyhow::Result<()> {
         let mut backups = self.list_backups().await?;
         if backups.len() <= keep_count {
@@ -87,6 +93,7 @@ impl StorageManager {
         }
         Ok(())
     }
+
     pub async fn restore_from_backup(&self, backup_path: &Path) -> anyhow::Result<()> {
         if !backup_path.exists() {
             return Err(anyhow::anyhow!("Backup file does not exist: {:?}", backup_path));
@@ -98,6 +105,7 @@ impl StorageManager {
         println!("Restored from backup: {:?}", backup_path);
         Ok(())
     }
+    
     pub async fn validate_data_integrity(&self) -> anyhow::Result<bool> {
         if !self.tasks_file.exists() {
             return Ok(true);
@@ -110,6 +118,7 @@ impl StorageManager {
             }
         }
     }
+
     pub async fn get_storage_info(&self) -> anyhow::Result<StorageInfo> {
         let mut info = StorageInfo {
             anchora_dir_exists: self.anchora_dir.exists(),
@@ -129,6 +138,7 @@ impl StorageManager {
         info.backup_count = self.list_backups().await?.len();
         Ok(info)
     }
+
     pub async fn export_data(&self, export_path: &Path) -> anyhow::Result<()> {
         let project_data = self.load_project_data().await?;
         let json_content = serde_json::to_string_pretty(&project_data)?;
@@ -136,6 +146,7 @@ impl StorageManager {
         println!("Exported data to: {:?}", export_path);
         Ok(())
     }
+    
     pub async fn import_data(&self, import_path: &Path) -> anyhow::Result<()> {
         if !import_path.exists() {
             return Err(anyhow::anyhow!("Import file does not exist: {:?}", import_path));
