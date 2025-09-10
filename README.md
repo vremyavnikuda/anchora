@@ -31,23 +31,6 @@ Anchora consists of two main components:
 2. Open any project - Anchora will auto-initialize
 3. Start adding tasks to your code comments
 
-## Project Structure
-
-```
-anchora/
-├── src/                    # Rust backend source
-│   ├── main.rs            # Application entry point
-│   ├── task_manager.rs    # Core task management
-│   ├── file_parser.rs     # Comment parsing logic
-│   ├── storage.rs         # Data persistence
-│   └── ...
-├── vscode/                # VSCode extension
-│   ├── src/               # TypeScript source
-│   ├── package.json       # Extension manifest
-│   └── ...
-└── test/                  # Test suite
-```
-
 ## Development Status
 
 **Project is actively under development**
@@ -64,20 +47,6 @@ anchora/
 - **Frontend**: TypeScript, VSCode API
 - **Communication**: JSON-RPC over stdin/stdout
 - **Build**: Cargo (Rust), npm (TypeScript)
-
-## Building
-
-### Backend
-```bash
-cargo build --release
-```
-
-### VSCode Extension
-```bash
-cd vscode
-npm install
-npm run build:all
-```
 
 ## Contributing
 
