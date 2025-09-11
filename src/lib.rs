@@ -28,9 +28,11 @@ pub use communication::{
 pub use file_watcher::{
     FileWatcher, FileEvent, WatcherConfig, WatcherStats, EventDebouncer
 };
+
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 pub const NAME: &str = env!("CARGO_PKG_NAME");
 pub const DESCRIPTION: &str = env!("CARGO_PKG_DESCRIPTION");
+
 pub fn version_info() -> String {
     format!("{} v{}", NAME, VERSION)
 }

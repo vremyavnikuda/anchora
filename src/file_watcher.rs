@@ -54,7 +54,7 @@ pub struct FileWatcher {
 }
 
 impl FileWatcher {
-    /// Создать новый наблюдатель
+
     pub fn new(
         workspace_path: &Path,
         config: WatcherConfig,
