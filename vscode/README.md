@@ -106,6 +106,12 @@ All commands are available through `Ctrl+Shift+P`
 
 ## Installation
 
+### From VS Code Marketplace
+Install directly from the Visual Studio Code Marketplace:
+[Anchora - Task Manager](https://marketplace.visualstudio.com/items?itemName=vremyavnikuda.anchora)
+
+Or search for "Anchora" in the VS Code Extensions view (`Ctrl+Shift+X`).
+
 ### From VSIX Package
 ```bash
 code --install-extension anchora-0.1.0.vsix

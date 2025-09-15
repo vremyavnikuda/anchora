@@ -137,6 +137,13 @@ In settings.json you can configure:
 
 ## Installation
 
+### From VS Code Marketplace
+Install directly from the Visual Studio Code Marketplace:
+[Anchora - Task Manager](https://marketplace.visualstudio.com/items?itemName=vremyavnikuda.anchora)
+
+Or search for "Anchora" in the VS Code Extensions view (`Ctrl+Shift+X`).
+
+### From VSIX Package
 1. Install the VSCode extension from the VSIX package
 2. Open any project - Anchora will auto-initialize
 3. Start adding tasks to your code comments
