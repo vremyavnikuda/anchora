@@ -1,6 +1,7 @@
 # Anchora - VSCode Extension
 
 > [Русская версия / Russian Version](doc/README_RU_VSCODE.md)
+
 ## What is it?
 
 Anchora is a VSCode extension that allows you to manage tasks directly in your code. Instead of external task trackers, you write tasks in code comments, and the extension automatically tracks and visualizes them.
