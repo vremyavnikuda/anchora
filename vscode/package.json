@@ -1,27 +1,42 @@
 {
   "name": "anchora",
-  "displayName": "Anchora",
+  "displayName": "anchora",
   "description": "Revolutionary task manager for developers that ties tasks to code, not files",
   "version": "0.1.0",
-  "publisher": "anchora-team",
+  "publisher": "vremyavnikuda",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
     "url": "https://github.com/vremyavnikuda/anchora"
   },
+  "bugs": {
+    "url": "https://github.com/vremyavnikuda/anchora/issues"
+  },
+  "homepage": "https://github.com/vremyavnikuda/anchora#readme",
   "engines": {
     "vscode": "^1.70.0"
   },
   "categories": [
     "Other",
-    "Extension Packs"
+    "Extension Packs",
+    "Snippets",
+    "Notebooks"
   ],
   "keywords": [
     "task-manager",
     "todo",
     "project-management",
-    "development-tools"
+    "development-tools",
+    "code-comments",
+    "task-tracking",
+    "productivity",
+    "developer-tools"
   ],
+  "galleryBanner": {
+    "color": "#1e1e1e",
+    "theme": "dark"
+  },
+  "icon": "icon/logo.png",
   "activationEvents": [
     "onStartupFinished"
   ],
@@ -457,6 +472,7 @@
   "files": [
     "out/**/*",
     "server/**/*",
+    "icon/**/*",
     "README.md",
     "package.json"
   ],
