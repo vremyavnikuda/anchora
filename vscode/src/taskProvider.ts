@@ -339,13 +339,11 @@ export class TaskTreeProvider implements vscode.TreeDataProvider<TaskTreeItem> {
      */
     async getTaskCounts(): Promise<Record<TaskStatus, number>> {
         try {
-            // Use server-side statistics with caching
             const statistics = await this.client.getStatistics();
             return statistics.by_status;
         } catch (error) {
             console.error('Server-side statistics failed, falling back to client-side:', error);
 
-            // Fallback to original client-side counting
             const counts: Record<TaskStatus, number> = {
                 todo: 0,
                 in_progress: 0,
@@ -372,7 +370,6 @@ export class TaskTreeProvider implements vscode.TreeDataProvider<TaskTreeItem> {
         if (!query.trim()) return [];
 
         try {
-            // Use server-side search with indexing
             const searchResult = await this.client.searchTasks({
                 query: query,
                 filters: {
@@ -381,7 +378,6 @@ export class TaskTreeProvider implements vscode.TreeDataProvider<TaskTreeItem> {
                 limit: 50
             });
 
-            // Convert server results to TaskTreeItem format
             return searchResult.tasks.map(task => ({
                 type: 'task' as const,
                 label: `${task.section}:${task.task_id} - ${task.title}`,
@@ -393,7 +389,6 @@ export class TaskTreeProvider implements vscode.TreeDataProvider<TaskTreeItem> {
         } catch (error) {
             console.error('Server-side search failed, falling back to client-side:', error);
 
-            // Fallback to original client-side search if server fails
             if (!this.projectData) return [];
 
             const lowerQuery = query.toLowerCase();

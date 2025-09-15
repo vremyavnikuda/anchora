@@ -347,48 +347,31 @@ impl TaskManagerHandler {
         })
     }
 
-    // New server-side operation implementations
-
     async fn search_tasks(&self, params: SearchTasksParams) -> anyhow::Result<serde_json::Value> {
-        // Load current project data and update search index
         let project_data = self.storage.load_project_data().await?;
         self.search_engine.index_project(&project_data)?;
-
-        // Convert params to search query
         let search_query = SearchQuery {
             query: params.query,
             filters: params.filters.and_then(|f| serde_json::from_value(f).ok()),
             limit: params.limit,
             offset: params.offset,
         };
-
-        // Perform search
         let result = self.search_engine.search(&search_query)?;
         Ok(serde_json::to_value(result)?)
     }
 
     async fn get_statistics(&self) -> anyhow::Result<serde_json::Value> {
         let project_data = self.storage.load_project_data().await?;
-        
-        // Update contexts
         self.statistics_manager.get_statistics(&project_data).map(|stats| serde_json::to_value(stats).unwrap_or(serde_json::Value::Null))
     }
 
     async fn get_task_overview(&self) -> anyhow::Result<serde_json::Value> {
         let project_data = self.storage.load_project_data().await?;
-        
-        // Get basic overview data
         let overview = self.statistics_manager.get_overview(&project_data)?;
-        
-        // Get recent activity
         let recent_activity = self.statistics_manager.get_recent_activity()?;
-        
-        // Build sections with actual task data
         let mut sections_with_tasks = Vec::new();
         for section_summary in &overview.sections {
             let mut section_tasks = Vec::new();
-            
-            // Get actual tasks from the section
             if let Some(section_data) = project_data.sections.get(&section_summary.name) {
                 for (task_id, task) in section_data {
                     let task_info = serde_json::json!({
@@ -415,8 +398,6 @@ impl TaskManagerHandler {
             });
             sections_with_tasks.push(section_with_tasks);
         }
-        
-        // Create TaskStatistics structure that matches frontend expectations
         let task_statistics = serde_json::json!({
             "total_tasks": overview.total_tasks,
             "by_status": {
@@ -425,8 +406,8 @@ impl TaskManagerHandler {
                 "done": overview.completed_tasks,
                 "blocked": overview.blocked_tasks
             },
-            "by_section": {}, // TODO: implement section-wise stats
-            "recent_updates": [], // TODO: implement recent updates
+            "by_section": {},
+            "recent_updates": [],
             "performance_metrics": {
                 "calculation_time_ms": 0,
                 "cache_hit_rate": 0.0,
@@ -442,7 +423,6 @@ impl TaskManagerHandler {
             }
         });
         
-        // Create the complete TaskOverview structure expected by frontend
         let complete_overview = serde_json::json!({
             "sections": sections_with_tasks,
             "statistics": task_statistics,

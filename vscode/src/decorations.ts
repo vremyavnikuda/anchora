@@ -177,14 +177,12 @@ export class DecorationProvider {
         markdown.appendMarkdown(`**Task:** \`${section}:${taskId}\`\n\n`);
         markdown.appendMarkdown(`**Status:** ${this.getStatusIcon(status)} ${status}\n\n`);
 
-        // Find and display related notes
         const relatedNotes = this.getNotesForTask(section, taskId);
         if (relatedNotes.length > 0) {
             markdown.appendMarkdown(`**Related Notes (${relatedNotes.length}):**\n\n`);
             for (const note of relatedNotes) {
                 markdown.appendMarkdown(`• **${note.title}**\n`);
                 if (note.content) {
-                    // Truncate long content for hover display
                     const truncatedContent = note.content.length > 200
                         ? note.content.substring(0, 200) + '...'
                         : note.content;

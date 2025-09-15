@@ -31,7 +31,6 @@ export class NoteTreeProvider implements vscode.TreeDataProvider<NoteItem> {
 
     getChildren(element?: NoteItem): Thenable<NoteItem[]> {
         if (!element) {
-            // Root elements - all notes
             return Promise.resolve(
                 this.notes.map(note => new NoteItem(
                     note,

@@ -108,7 +108,6 @@ macro_rules! handle_jsonrpc_method {
                         serde_json::Value::Null
                     }
                 };
-                // Add performance metrics to response for server-side operations
                 if $method_name.starts_with("search_") || $method_name.starts_with("get_statistics") || $method_name.starts_with("validate_") {
                     if let serde_json::Value::Object(mut obj) = json_value {
                         obj.insert("_performance".to_string(), serde_json::json!({
@@ -308,7 +307,6 @@ macro_rules! handle_search_operation {
                         
                         match result {
                             Ok(mut search_result) => {
-                                // Add performance metrics to search results
                                 if let Ok(mut json_result) = serde_json::to_value(&search_result) {
                                     if let serde_json::Value::Object(ref mut obj) = json_result {
                                         obj.insert("performance_metrics".to_string(), serde_json::json!({

@@ -90,10 +90,6 @@ export class CommandHandler {
      * Check if we're in development mode
      */
     private isDevelopmentMode(): boolean {
-        // Check if we're in development mode by looking at:
-        // 1. Configuration setting
-        // 2. Environment variable
-        // 3. Extension development host
         const config = vscode.workspace.getConfiguration('anchora');
         const configDevelopmentMode = config.get<boolean>('developmentMode', false);
 
@@ -133,7 +129,6 @@ export class CommandHandler {
             vscode.commands.registerCommand('anchora.deleteNote', (noteIdOrItem: string | any) => this.deleteNote(noteIdOrItem))
         ];
 
-        // Register development-only commands
         if (this.isDevelopmentMode()) {
             logCommandInfo('Registering development commands...');
             commands.push(
@@ -468,7 +463,6 @@ export class CommandHandler {
             });
             if (!query) return;
 
-            // Use server-side search for better performance
             const results = await this.taskProvider.searchTasks(query);
 
             if (results.length === 0) {
@@ -504,7 +498,6 @@ export class CommandHandler {
     private async getCurrentTaskReference(): Promise<{ section: string; taskId: string } | null> {
         const editor = vscode.window.activeTextEditor;
         if (!editor) {
-            // Don't show error message here since this method is now used as a fallback
             return null;
         }
         const line = editor.document.lineAt(editor.selection.active.line);
@@ -691,8 +684,6 @@ export class CommandHandler {
                 vscode.window.showInformationMessage('No project data available.');
                 return;
             }
-            // Allow overview to open even when no tasks exist
-            // Users should be able to see the overview and potentially create new tasks
             const taskOverview = await this.getTaskOverview();
             await this.showTaskOverviewPanel(taskOverview);
         } catch (error) {
@@ -738,15 +729,14 @@ export class CommandHandler {
         };
 
         try {
-            // Use server-side filtered search for each status
             for (const status of ['todo', 'in_progress', 'done', 'blocked'] as TaskStatus[]) {
                 const searchResult = await this.client.searchTasks({
-                    query: '*', // Search all tasks
+                    query: '*',
                     filters: {
                         statuses: [status],
                         include_descriptions: true
                     },
-                    limit: 1000 // High limit to get all tasks
+                    limit: 1000
                 });
 
                 groups[status] = searchResult.tasks.map(task => ({
@@ -759,7 +749,6 @@ export class CommandHandler {
             }
         } catch (error) {
             logCommandError('Failed to group tasks by status using server-side filtering', error);
-            // Return empty groups on error
         }
 
         return groups;

@@ -139,12 +139,10 @@ impl ValidationEngine {
         let mut suggestions = Vec::new();
         let mut alternative_ids = Vec::new();
         
-        // Validate task ID format
         if let Some(error) = self.validate_task_id_format(&params.task_id) {
             errors.push(error);
         }
         
-        // Check for reserved names
         if self.reserved_names.contains(&params.task_id.to_lowercase()) {
             errors.push(ValidationError {
                 error_type: "reserved_name".to_string(),
@@ -155,7 +153,6 @@ impl ValidationEngine {
             });
         }
         
-        // Check for duplicates if project data is available
         if let Some(data) = project_data.as_ref() {
             if let Some(section) = data.sections.get(&params.section) {
                 if section.contains_key(&params.task_id) {
@@ -167,7 +164,6 @@ impl ValidationEngine {
                         suggestion: Some("Please choose a different task ID".to_string()),
                     });
                     
-                    // Generate alternative IDs
                     if params.suggest_alternatives.unwrap_or(true) {
                         alternative_ids = self.generate_alternative_ids(&params.task_id, data);
                     }
@@ -175,7 +171,6 @@ impl ValidationEngine {
             }
         }
         
-        // Validate title if provided
         if let Some(title) = &params.title {
             if title.trim().is_empty() {
                 warnings.push(ValidationWarning {
@@ -195,7 +190,6 @@ impl ValidationEngine {
             }
         }
         
-        // Validate description if provided
         if let Some(description) = &params.description {
             if description.len() > self.config.max_description_length {
                 errors.push(ValidationError {
@@ -208,7 +202,6 @@ impl ValidationEngine {
             }
         }
         
-        // Generate smart suggestions if enabled
         if self.config.enable_smart_suggestions && errors.is_empty() {
             suggestions = self.generate_smart_suggestions(params);
         }
@@ -236,7 +229,6 @@ impl ValidationEngine {
         let mut resolutions = Vec::new();
         
         if let Some(data) = project_data.as_ref() {
-            // Check for exact ID matches in other sections
             for (other_section, section_data) in &data.sections {
                 if other_section != section && section_data.contains_key(task_id) {
                     conflicts.push(Conflict {
@@ -253,7 +245,6 @@ impl ValidationEngine {
                 }
             }
             
-            // Check for similar IDs that might cause confusion
             if let Some(current_section) = data.sections.get(section) {
                 for existing_id in current_section.keys() {
                     if self.calculate_similarity(task_id, existing_id) > self.config.similarity_threshold {
@@ -316,10 +307,9 @@ impl ValidationEngine {
     /// Generate alternative task IDs
     fn generate_alternative_ids(&self, base_id: &str, project_data: &ProjectData) -> Vec<String> {
         let mut alternatives = Vec::new();
-        let section_data = project_data.sections.values().next(); // Use first section for checking
+        let section_data = project_data.sections.values().next();
         
         if let Some(section) = section_data {
-            // Try numbered alternatives
             for i in 1..=5 {
                 let alternative = format!("{}_{}", base_id, i);
                 if !section.contains_key(&alternative) {
@@ -327,7 +317,6 @@ impl ValidationEngine {
                 }
             }
             
-            // Try suffixed alternatives
             let suffixes = ["_new", "_v2", "_alt", "_task", "_item"];
             for suffix in &suffixes {
                 let alternative = format!("{}{}", base_id, suffix);
@@ -337,7 +326,7 @@ impl ValidationEngine {
             }
         }
         
-        alternatives.truncate(3); // Limit to 3 suggestions
+        alternatives.truncate(3);
         alternatives
     }
 
@@ -345,7 +334,6 @@ impl ValidationEngine {
     fn generate_smart_suggestions(&self, params: &ValidationParams) -> Vec<String> {
         let mut suggestions = Vec::new();
         
-        // Suggest based on task ID patterns
         if params.task_id.contains("bug") {
             suggestions.push("Consider using status 'blocked' if this is a critical bug".to_string());
         }
@@ -399,10 +387,10 @@ impl ValidationEngine {
                 let cost = if chars1[i - 1] == chars2[j - 1] { 0 } else { 1 };
                 matrix[i][j] = std::cmp::min(
                     std::cmp::min(
-                        matrix[i - 1][j] + 1,      // deletion
-                        matrix[i][j - 1] + 1       // insertion
+                        matrix[i - 1][j] + 1,
+                        matrix[i][j - 1] + 1
                     ),
-                    matrix[i - 1][j - 1] + cost    // substitution
+                    matrix[i - 1][j - 1] + cost
                 );
             }
         }
@@ -414,7 +402,6 @@ impl ValidationEngine {
     fn create_reserved_names() -> HashSet<String> {
         let mut reserved = HashSet::new();
         
-        // Common programming keywords
         reserved.insert("class".to_string());
         reserved.insert("function".to_string());
         reserved.insert("var".to_string());
@@ -430,7 +417,6 @@ impl ValidationEngine {
         reserved.insert("null".to_string());
         reserved.insert("undefined".to_string());
         
-        // Common system terms
         reserved.insert("system".to_string());
         reserved.insert("admin".to_string());
         reserved.insert("root".to_string());
@@ -440,7 +426,6 @@ impl ValidationEngine {
         reserved.insert("private".to_string());
         reserved.insert("protected".to_string());
         
-        // Common action words that might conflict
         reserved.insert("new".to_string());
         reserved.insert("create".to_string());
         reserved.insert("delete".to_string());
@@ -492,7 +477,7 @@ mod tests {
         let engine = ValidationEngine::new(None);
         let params = ValidationParams {
             section: "test".to_string(),
-            task_id: "class".to_string(), // Reserved name
+            task_id: "class".to_string(),
             title: Some("Test task".to_string()),
             description: None,
             check_duplicates: Some(true),

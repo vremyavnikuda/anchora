@@ -154,31 +154,20 @@ impl SearchEngine {
         let start_time = Instant::now();
         let mut index = self.index.write().map_err(|_| anyhow::anyhow!("Failed to acquire write lock on search index"))?;
         
-        // Clear existing index
         index.clear();
-        
-        // Index all tasks
         for (section_name, section) in &project_data.sections {
             for (task_id, task) in section {
                 let full_task_id = format!("{}.{}", section_name, task_id);
                 let task_ref = TaskReference::from_task(section_name, task_id, task);
-                
-                // Add to main index
                 index.task_index.insert(full_task_id.clone(), task_ref.clone());
-                
-                // Add to section index
                 index.section_index
                     .entry(section_name.clone())
                     .or_insert_with(HashSet::new)
                     .insert(full_task_id.clone());
-                
-                // Add to status index
                 index.status_index
                     .entry(task.status.clone())
                     .or_insert_with(HashSet::new)
                     .insert(full_task_id.clone());
-                
-                // Add to word index
                 for keyword in &task_ref.keywords {
                     index.word_index
                         .entry(keyword.clone())
@@ -187,10 +176,7 @@ impl SearchEngine {
                 }
             }
         }
-        
         index.last_updated = Utc::now();
-        
-        // Update performance stats
         if let Ok(mut stats) = self.performance_stats.write() {
             stats.index_rebuilds += 1;
             stats.last_index_rebuild = Some(Utc::now());
@@ -207,7 +193,6 @@ impl SearchEngine {
         let start_time = Instant::now();
         let index = self.index.read().map_err(|_| anyhow::anyhow!("Failed to acquire read lock on search index"))?;
         
-        // Simple implementation for now - just return all tasks that match basic criteria
         let mut results = Vec::new();
         let query_lower = query.query.to_lowercase();
         
@@ -215,7 +200,6 @@ impl SearchEngine {
             let mut matches = false;
             let mut match_type = MatchType::Fuzzy;
             
-            // Check title match
             if task_ref.title.to_lowercase().contains(&query_lower) {
                 matches = true;
                 if task_ref.title.to_lowercase() == query_lower {
@@ -225,7 +209,6 @@ impl SearchEngine {
                 }
             }
             
-            // Check description match
             if let Some(desc) = &task_ref.description {
                 if desc.to_lowercase().contains(&query_lower) {
                     matches = true;
@@ -241,14 +224,13 @@ impl SearchEngine {
                     status: task_ref.status.clone(),
                     created: task_ref.created,
                     updated: task_ref.updated,
-                    file_count: 1, // TODO: implement proper file counting
-                    relevance: 1.0, // TODO: implement proper relevance scoring
+                    file_count: 1,
+                    relevance: 1.0,
                     match_type,
                 });
             }
         }
         
-        // Apply filters
         if let Some(filters) = &query.filters {
             if let Some(statuses) = &filters.statuses {
                 results.retain(|r| statuses.contains(&r.status));
@@ -260,7 +242,6 @@ impl SearchEngine {
         
         let total_count = results.len() as u32;
         
-        // Apply pagination
         let offset = query.offset.unwrap_or(0);
         let limit = query.limit.unwrap_or(50);
         
@@ -273,7 +254,6 @@ impl SearchEngine {
         
         let search_time = start_time.elapsed();
         
-        // Update performance stats
         if let Ok(mut stats) = self.performance_stats.write() {
             stats.total_searches += 1;
             stats.total_search_time_ms += search_time.as_millis() as u64;
@@ -284,7 +264,7 @@ impl SearchEngine {
             total_count,
             filtered_count: total_count,
             search_time_ms: search_time.as_millis() as u64,
-            suggestions: vec![], // TODO: implement suggestions
+            suggestions: vec![],
         })
     }
 
@@ -294,7 +274,6 @@ impl SearchEngine {
         let mut suggestions = Vec::new();
         let query_lower = partial_query.to_lowercase();
         
-        // Add section suggestions
         for section_name in index.section_index.keys() {
             if section_name.to_lowercase().starts_with(&query_lower) {
                 suggestions.push(Suggestion {
@@ -306,7 +285,6 @@ impl SearchEngine {
             }
         }
         
-        // Add task ID suggestions
         for task_ref in index.task_index.values() {
             if task_ref.task_id.to_lowercase().starts_with(&query_lower) {
                 suggestions.push(Suggestion {
@@ -318,14 +296,12 @@ impl SearchEngine {
             }
         }
         
-        // Sort by relevance and frequency
         suggestions.sort_by(|a, b| {
             b.relevance.partial_cmp(&a.relevance)
                 .unwrap_or(std::cmp::Ordering::Equal)
                 .then(b.frequency.cmp(&a.frequency))
         });
         
-        // Limit results
         suggestions.truncate(10);
         
         Ok(suggestions)
@@ -380,7 +356,6 @@ impl TaskReference {
     fn from_task(section: &str, task_id: &str, task: &Task) -> Self {
         let mut keywords = Vec::new();
         
-        // Extract keywords from title
         keywords.extend(
             task.title
                 .to_lowercase()
@@ -389,7 +364,6 @@ impl TaskReference {
                 .map(String::from)
         );
         
-        // Extract keywords from description
         if let Some(desc) = &task.description {
             keywords.extend(
                 desc.to_lowercase()
@@ -399,11 +373,9 @@ impl TaskReference {
             );
         }
         
-        // Add section and task_id as keywords
         keywords.push(section.to_lowercase());
         keywords.push(task_id.to_lowercase());
         
-        // Remove duplicates
         keywords.sort();
         keywords.dedup();
         

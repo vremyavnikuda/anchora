@@ -204,8 +204,6 @@ export function createSectionName(value: string): SectionName | null {
     return isNonEmptyString(value) ? (value as unknown as SectionName) : null;
 }
 
-// New server-side API types
-
 export interface SearchTasksParams {
     readonly query: string;
     readonly filters?: {

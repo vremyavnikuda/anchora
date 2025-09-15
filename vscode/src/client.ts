@@ -25,7 +25,6 @@ import {
     CreateNoteResponse,
     GenerateLinkResponse,
     BasicResponse,
-    // New server-side API types
     SearchTasksParams,
     SearchResult,
     TaskStatistics,
@@ -299,7 +298,6 @@ export class JsonRpcClient {
         });
         this.process.stderr?.on('data', (data: Buffer) => {
             const message = data.toString().trim();
-            // Only log stderr as error if it's not a debug message from the backend
             if (message.startsWith('[DEBUG]')) {
                 if (debugMode) {
                     logClientDebug('Backend debug message', { message });
@@ -434,13 +432,11 @@ export class JsonRpcClient {
      */
     private getDefaultBinaryPath(): string {
         const binaryName = process.platform === 'win32' ? 'anchora.exe' : 'anchora';
-        // Use server directory within the extension
         const serverPath = path.join(__dirname, '..', 'server', binaryName);
         logClientInfo(`Using default binary path: ${serverPath}`);
         return serverPath;
     }
 
-    // API Methods
     async scanProject(params: ScanProjectParams): Promise<ScanProjectResult> {
         return await this.sendRequest('scan_project', params) as ScanProjectResult;
     }
@@ -465,7 +461,6 @@ export class JsonRpcClient {
         return await this.sendRequest('find_task_references', params) as ReadonlyArray<TaskReference>;
     }
 
-    // Note Management API Methods
     async createNote(params: CreateNoteParams): Promise<CreateNoteResponse> {
         return await this.sendRequest('create_note', params) as CreateNoteResponse;
     }
@@ -481,8 +476,6 @@ export class JsonRpcClient {
     async deleteNote(noteId: string): Promise<BasicResponse> {
         return await this.sendRequest('delete_note', { note_id: noteId }) as BasicResponse;
     }
-
-    // New server-side API methods
 
     /**
      * Search tasks using server-side indexing and filtering
