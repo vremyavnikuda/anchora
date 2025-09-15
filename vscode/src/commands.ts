@@ -87,6 +87,25 @@ export class CommandHandler {
     }
 
     /**
+     * Check if we're in development mode
+     */
+    private isDevelopmentMode(): boolean {
+        // Check if we're in development mode by looking at:
+        // 1. Configuration setting
+        // 2. Environment variable
+        // 3. Extension development host
+        const config = vscode.workspace.getConfiguration('anchora');
+        const configDevelopmentMode = config.get<boolean>('developmentMode', false);
+
+        return (
+            configDevelopmentMode ||
+            process.env['NODE_ENV'] === 'development' ||
+            process.env['VSCODE_DEBUG_MODE'] === '1' ||
+            this.context.extensionMode === vscode.ExtensionMode.Development
+        );
+    }
+
+    /**
      * Register all commands
      */
     registerCommands(): void {
@@ -106,17 +125,25 @@ export class CommandHandler {
                 this.showTaskReferences(section, taskId)),
             vscode.commands.registerCommand('anchora.searchTasks', () => this.searchTasks()),
             vscode.commands.registerCommand('anchora.viewAllTaskLists', () => this.viewAllTaskLists()),
-            vscode.commands.registerCommand('anchora.viewTasksByStatus', () => this.viewTasksByStatus()),
             vscode.commands.registerCommand('anchora.initializeProject', () => this.initializeProject()),
-            vscode.commands.registerCommand('anchora.toggleDebugMode', () => this.toggleDebugMode()),
-            vscode.commands.registerCommand('anchora.showOutputChannel', () => this.showOutputChannel()),
-            vscode.commands.registerCommand('anchora.testErrorHandling', () => this.testErrorHandling()),
             vscode.commands.registerCommand('anchora.createNote', () => this.createNote()),
             vscode.commands.registerCommand('anchora.refreshNotes', () => this.refreshNotes()),
             vscode.commands.registerCommand('anchora.generateTaskLink', (noteIdOrItem: string | any) => this.generateTaskLink(noteIdOrItem)),
             vscode.commands.registerCommand('anchora.viewNote', (noteIdOrItem: string | any) => this.viewNote(noteIdOrItem)),
             vscode.commands.registerCommand('anchora.deleteNote', (noteIdOrItem: string | any) => this.deleteNote(noteIdOrItem))
         ];
+
+        // Register development-only commands
+        if (this.isDevelopmentMode()) {
+            logCommandInfo('Registering development commands...');
+            commands.push(
+                vscode.commands.registerCommand('anchora.viewTasksByStatus', () => this.viewTasksByStatus()),
+                vscode.commands.registerCommand('anchora.toggleDebugMode', () => this.toggleDebugMode()),
+                vscode.commands.registerCommand('anchora.showOutputChannel', () => this.showOutputChannel()),
+                vscode.commands.registerCommand('anchora.testErrorHandling', () => this.testErrorHandling())
+            );
+        }
+
         commands.forEach(command => this.context.subscriptions.push(command));
         logCommandInfo(`Registered ${commands.length} commands successfully`);
     }

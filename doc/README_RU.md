@@ -21,10 +21,31 @@ Anchora — это расширение для VSCode, которое превр
 - Древовидное отображение задач и заметок
 - Поиск по задачам
 
-### Мониторинг файлов
-- Автоматическое отслеживание изменений в файлах
-- Синхронизация задач в реальном времени
-- Поддержка множества языков программирования
+<details>
+<summary><strong>Поддерживаемые языки программирования</strong> (нажмите для раскрытия)</summary>
+
+### Anchora поддерживает широкий спектр языков программирования:
+
+- Rust (.rs), C (.c), C++ (.cpp, .cc, .cxx), C# (.cs), Go (.go)
+- JavaScript (.js), TypeScript (.ts), JSX (.jsx), TSX (.tsx)
+- HTML (.html), CSS (.css), SCSS (.scss), SASS (.sass), LESS (.less)
+- Vue (.vue), Svelte (.svelte)
+- Python (.py), Java (.java), PHP (.php), Ruby (.rb)
+- Shell (.sh), PowerShell (.ps1), Batch (.bat, .cmd)
+- Swift (.swift), Kotlin (.kt), Dart (.dart)
+- Objective-C (.m, .mm)
+- Haskell (.hs), F# (.fs), OCaml (.ml), Clojure (.clj), Elm (.elm)
+- Java (.java), Kotlin (.kt), Scala (.scala), Clojure (.clj)
+- Julia (.jl), R (.r), Lua (.lua), Perl (.pl, .pm)
+- Erlang (.erl), Elixir (.ex, .exs)
+- Docker (.dockerfile), Terraform (.tf), HCL (.hcl)
+- YAML (.yaml, .yml), TOML (.toml), JSON (.json), XML (.xml)
+- INI (.ini), CFG (.cfg), CONF (.conf)
+- Markdown (.md), reStructuredText (.rst), LaTeX (.tex)
+- SQL (.sql)
+- Visual Basic (.vb)
+
+</details>
 
 ## Как пользоваться
 
@@ -74,10 +95,10 @@ Anchora — это расширение для VSCode, которое превр
 ### Цветовая индикация
 
 Задачи подсвечиваются в редакторе разными цветами:
-- **Todo** (○): Желтый - новые задачи
-- **In Progress** (◐): Синий - в работе  
-- **Done** (●): Зеленый - выполненные
-- **Blocked** (◯): Красный - заблокированные
+- **Todo** (○): Красный (#ff6b6b) - новые задачи
+- **In Progress** (◐): Бирюзовый (#4ecdc4) - в работе  
+- **Done** (●): Синий (#45b7d1) - выполненные
+- **Blocked** (◯): Желтый (#f9ca24) - заблокированные
 
 ### Workflow с заметками
 

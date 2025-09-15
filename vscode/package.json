@@ -4,6 +4,7 @@
   "description": "Revolutionary task manager for developers that ties tasks to code, not files",
   "version": "0.1.0",
   "publisher": "anchora-team",
+  "license": "Apache-2.0",
   "repository": {
     "type": "git",
     "url": "https://github.com/vremyavnikuda/anchora"
@@ -102,7 +103,8 @@
       {
         "command": "anchora.viewTasksByStatus",
         "title": "View Tasks by Status",
-        "icon": "$(filter)"
+        "icon": "$(filter)",
+        "enablement": "config.anchora.developmentMode"
       },
       {
         "command": "anchora.searchTasks",
@@ -117,7 +119,8 @@
       {
         "command": "anchora.showOutputChannel",
         "title": "Show Output Channel",
-        "icon": "$(output)"
+        "icon": "$(output)",
+        "enablement": "config.anchora.developmentMode"
       },
       {
         "command": "anchora.initializeProject",
@@ -127,12 +130,14 @@
       {
         "command": "anchora.toggleDebugMode",
         "title": "Toggle Debug Mode",
-        "icon": "$(debug)"
+        "icon": "$(debug)",
+        "enablement": "config.anchora.developmentMode"
       },
       {
         "command": "anchora.testErrorHandling",
         "title": "Test Enhanced Error Handling",
-        "icon": "$(bug)"
+        "icon": "$(bug)",
+        "enablement": "config.anchora.developmentMode"
       },
       {
         "command": "anchora.createNote",
@@ -194,12 +199,12 @@
       {
         "command": "anchora.toggleDebugMode",
         "key": "ctrl+shift+alt+d",
-        "when": "workspaceHasAnchoraProject"
+        "when": "workspaceHasAnchoraProject && config.anchora.developmentMode"
       },
       {
         "command": "anchora.showOutputChannel",
         "key": "ctrl+shift+alt+o",
-        "when": "workspaceHasAnchoraProject"
+        "when": "workspaceHasAnchoraProject && config.anchora.developmentMode"
       }
     ],
     "menus": {
@@ -210,7 +215,7 @@
         },
         {
           "command": "anchora.viewTasksByStatus",
-          "when": "workspaceHasAnchoraProject"
+          "when": "workspaceHasAnchoraProject && config.anchora.developmentMode"
         },
         {
           "command": "anchora.searchTasks",
@@ -228,16 +233,19 @@
           "command": "anchora.openTaskDashboard"
         },
         {
-          "command": "anchora.showOutputChannel"
+          "command": "anchora.showOutputChannel",
+          "when": "config.anchora.developmentMode"
         },
         {
-          "command": "anchora.toggleDebugMode"
+          "command": "anchora.toggleDebugMode",
+          "when": "config.anchora.developmentMode"
         },
         {
           "command": "anchora.initializeProject"
         },
         {
-          "command": "anchora.testErrorHandling"
+          "command": "anchora.testErrorHandling",
+          "when": "config.anchora.developmentMode"
         },
         {
           "command": "anchora.createNote",
@@ -281,7 +289,7 @@
         },
         {
           "command": "anchora.viewTasksByStatus",
-          "when": "view == anchoraTaskTree || view == anchoraTaskTreeExplorer",
+          "when": "view == anchoraTaskTree || view == anchoraTaskTreeExplorer && config.anchora.developmentMode",
           "group": "secondary"
         },
         {
@@ -291,12 +299,12 @@
         },
         {
           "command": "anchora.showOutputChannel",
-          "when": "view == anchoraWelcome || view == anchoraTaskTree || view == anchoraTaskTreeExplorer",
+          "when": "view == anchoraWelcome || view == anchoraTaskTree || view == anchoraTaskTreeExplorer && config.anchora.developmentMode",
           "group": "secondary"
         },
         {
           "command": "anchora.toggleDebugMode",
-          "when": "view == anchoraWelcome || view == anchoraTaskTree || view == anchoraTaskTreeExplorer",
+          "when": "view == anchoraWelcome || view == anchoraTaskTree || view == anchoraTaskTreeExplorer && config.anchora.developmentMode",
           "group": "secondary"
         },
         {
@@ -343,12 +351,84 @@
       "properties": {
         "anchora.filePatterns": {
           "type": "array",
-          "default": ["**/*.rs", "**/*.ts", "**/*.js", "**/*.py", "**/*.java", "**/*.cpp", "**/*.c", "**/*.h", "**/*.go"],
+          "default": [
+            "**/*.rs",
+            "**/*.ts",
+            "**/*.js",
+            "**/*.py",
+            "**/*.java",
+            "**/*.cpp",
+            "**/*.c",
+            "**/*.h",
+            "**/*.hpp",
+            "**/*.cc",
+            "**/*.cxx",
+            "**/*.go",
+            "**/*.php",
+            "**/*.rb",
+            "**/*.swift",
+            "**/*.kt",
+            "**/*.scala",
+            "**/*.cs",
+            "**/*.fs",
+            "**/*.vb",
+            "**/*.dart",
+            "**/*.elm",
+            "**/*.hs",
+            "**/*.ml",
+            "**/*.clj",
+            "**/*.ex",
+            "**/*.exs",
+            "**/*.erl",
+            "**/*.jl",
+            "**/*.r",
+            "**/*.m",
+            "**/*.mm",
+            "**/*.pl",
+            "**/*.pm",
+            "**/*.lua",
+            "**/*.sh",
+            "**/*.ps1",
+            "**/*.bat",
+            "**/*.cmd",
+            "**/*.jsx",
+            "**/*.tsx",
+            "**/*.vue",
+            "**/*.svelte",
+            "**/*.sql",
+            "**/*.yaml",
+            "**/*.yml",
+            "**/*.toml",
+            "**/*.ini",
+            "**/*.cfg",
+            "**/*.conf",
+            "**/*.dockerfile",
+            "**/*.tf",
+            "**/*.hcl",
+            "**/*.json",
+            "**/*.xml",
+            "**/*.html",
+            "**/*.css",
+            "**/*.scss",
+            "**/*.sass",
+            "**/*.less",
+            "**/*.md",
+            "**/*.rst",
+            "**/*.tex"
+          ],
           "description": "File patterns to scan for tasks"
         },
         "anchora.ignoredDirectories": {
           "type": "array",
-          "default": ["target", "node_modules", ".git", ".vscode", "dist", "build", "__pycache__"],
+          "default": [
+            "target",
+            "node_modules",
+            ".git",
+            ".vscode",
+            "dist",
+            "build",
+            "__pycache__"
+          ],
           "description": "Directories to ignore when scanning"
         },
         "anchora.decorationColors": {
@@ -365,6 +445,11 @@
           "type": "boolean",
           "default": false,
           "description": "Enable debug mode with verbose logging"
+        },
+        "anchora.developmentMode": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable development-only features (Toggle Debug Mode, Show Output Channel, View Tasks by Status)"
         }
       }
     }
@@ -381,11 +466,13 @@
     "build:backend": "cd .. && cargo build --release && cd vscode && npm run copy:backend",
     "copy:backend": "node -e \"const fs=require('fs'),path=require('path');const src=path.join('..','target','release',process.platform==='win32'?'anchora.exe':'anchora');const dest=path.join('server',path.basename(src));fs.mkdirSync('server',{recursive:true});fs.copyFileSync(src,dest);console.log('Backend copied to',dest);\"",
     "compile": "tsc -p ./",
+    "compile:prod": "cross-env NODE_ENV=production tsc -p ./",
     "watch": "tsc -watch -p ./",
     "pretest": "npm run compile && npm run lint",
     "lint": "eslint src --ext ts",
     "test": "node ./out/test/runTest.js",
     "package": "vsce package",
+    "package:prod": "npm run compile:prod && vsce package",
     "package:quick": "npm run compile && vsce package"
   },
   "devDependencies": {
@@ -396,6 +483,7 @@
     "eslint": "^8.20.0",
     "typescript": "^4.7.4",
     "@vscode/test-electron": "^2.1.5",
-    "@vscode/vsce": "^2.15.0"
+    "@vscode/vsce": "^2.15.0",
+    "cross-env": "^7.0.3"
   }
 }
