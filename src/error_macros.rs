@@ -77,6 +77,7 @@ pub fn create_enhanced_error(
 }
 
 /// Main macro for handling JSON-RPC method calls with unified error handling
+/// Enhanced for server-side logic migration with performance metrics
 #[macro_export]
 macro_rules! handle_jsonrpc_method {
     (
@@ -85,6 +86,7 @@ macro_rules! handle_jsonrpc_method {
         $operation:expr,
         $result:expr
     ) => {{
+        let start_time = std::time::Instant::now();
         let context = $crate::error_macros::ErrorContext::new(
             $operation,
             file!(),
@@ -94,9 +96,11 @@ macro_rules! handle_jsonrpc_method {
         )
         .with_method($method_name)
         .with_request_id($request_id.clone());
+        
         match $result {
             Ok(value) => {
-                eprintln!("[DEBUG] Operation '{}' completed successfully", $operation);
+                let duration = start_time.elapsed();
+                eprintln!("[DEBUG] Operation '{}' completed successfully in {:?}", $operation, duration);
                 let json_value = match serde_json::to_value(&value) {
                     Ok(v) => v,
                     Err(e) => {
@@ -104,11 +108,26 @@ macro_rules! handle_jsonrpc_method {
                         serde_json::Value::Null
                     }
                 };
-                $crate::communication::JsonRpcServer::success_response($request_id, json_value)
+                // Add performance metrics to response for server-side operations
+                if $method_name.starts_with("search_") || $method_name.starts_with("get_statistics") || $method_name.starts_with("validate_") {
+                    if let serde_json::Value::Object(mut obj) = json_value {
+                        obj.insert("_performance".to_string(), serde_json::json!({
+                            "duration_ms": duration.as_millis(),
+                            "operation": $operation,
+                            "timestamp": chrono::Utc::now().to_rfc3339()
+                        }));
+                        $crate::communication::JsonRpcServer::success_response($request_id, serde_json::Value::Object(obj))
+                    } else {
+                        $crate::communication::JsonRpcServer::success_response($request_id, json_value)
+                    }
+                } else {
+                    $crate::communication::JsonRpcServer::success_response($request_id, json_value) 
+                }
             }
             Err(error) => {
+                let duration = start_time.elapsed();
                 let enhanced_error = $crate::error_macros::create_enhanced_error(&error, &context, -1);
-                eprintln!("[ERROR] Operation '{}' failed: {}", $operation, error);
+                eprintln!("[ERROR] Operation '{}' failed after {:?}: {}", $operation, duration, error);
                 eprintln!("[ERROR] Context: {}:{} in {}", file!(), line!(), module_path!());
                 $crate::communication::JsonRpcServer::error_response($request_id, enhanced_error)
             }
@@ -212,6 +231,7 @@ macro_rules! handle_parameterized_method {
 }
 
 /// Enhanced error logging that can be integrated with VSCode extension debug system
+/// Extended for server-side operations monitoring
 pub fn log_error_to_debug_channel(
     operation: &str,
     error: &anyhow::Error,
@@ -233,6 +253,23 @@ pub fn log_error_to_debug_channel(
     eprintln!("ANCHORA_DEBUG: {}", structured_log);
 }
 
+/// Log performance metrics for server-side operations
+pub fn log_performance_metrics(
+    operation: &str,
+    duration: std::time::Duration,
+    additional_metrics: Option<serde_json::Value>,
+) {
+    let metrics = json!({
+        "level": "PERFORMANCE",
+        "timestamp": chrono::Utc::now().to_rfc3339(),
+        "operation": operation,
+        "duration_ms": duration.as_millis(),
+        "duration_micros": duration.as_micros(),
+        "additional_metrics": additional_metrics.unwrap_or(serde_json::Value::Null)
+    });
+    eprintln!("ANCHORA_PERF: {}", metrics);
+}
+
 /// Macro to add debug context to any operation
 #[macro_export]
 macro_rules! debug_context {
@@ -248,6 +285,214 @@ macro_rules! debug_context {
             context = context.with_data($key, $value);
         )*
         context
+    }};
+}
+
+/// Macro for handling server-side search operations with performance tracking
+#[macro_export]
+macro_rules! handle_search_operation {
+    (
+        $request:expr,
+        $param_type:ty,
+        $operation:expr,
+        |$params:ident| $search_call:expr
+    ) => {{
+        let start_time = std::time::Instant::now();
+        match $request.params {
+            Some(params) => {
+                match serde_json::from_value::<$param_type>(params) {
+                    Ok($params) => {
+                        let search_start = std::time::Instant::now();
+                        let result = $search_call;
+                        let search_duration = search_start.elapsed();
+                        
+                        match result {
+                            Ok(mut search_result) => {
+                                // Add performance metrics to search results
+                                if let Ok(mut json_result) = serde_json::to_value(&search_result) {
+                                    if let serde_json::Value::Object(ref mut obj) = json_result {
+                                        obj.insert("performance_metrics".to_string(), serde_json::json!({
+                                            "search_duration_ms": search_duration.as_millis(),
+                                            "total_duration_ms": start_time.elapsed().as_millis(),
+                                            "operation": $operation,
+                                            "timestamp": chrono::Utc::now().to_rfc3339()
+                                        }));
+                                    }
+                                    $crate::error_macros::log_performance_metrics(
+                                        $operation,
+                                        search_duration,
+                                        Some(serde_json::json!({"search_type": "indexed"}))
+                                    );
+                                    $crate::communication::JsonRpcServer::success_response($request.id, json_result)
+                                } else {
+                                    $crate::communication::JsonRpcServer::success_response($request.id, serde_json::to_value(&search_result).unwrap_or(serde_json::Value::Null))
+                                }
+                            }
+                            Err(error) => {
+                                let context = $crate::error_macros::ErrorContext::new(
+                                    $operation,
+                                    file!(),
+                                    line!(),
+                                    column!(),
+                                    module_path!()
+                                ).with_request_id($request.id.clone())
+                                 .with_data("search_duration_ms", search_duration.as_millis());
+                                let enhanced_error = $crate::error_macros::create_enhanced_error(&error, &context, -1);
+                                eprintln!("[ERROR] Search operation '{}' failed after {:?}: {}", $operation, search_duration, error);
+                                $crate::communication::JsonRpcServer::error_response($request.id, enhanced_error)
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!("[ERROR] Parameter parsing failed for search operation: {}", e);
+                        $crate::communication::JsonRpcServer::error_response(
+                            $request.id,
+                            $crate::communication::JsonRpcError::invalid_params()
+                        )
+                    }
+                }
+            }
+            None => {
+                eprintln!("[ERROR] Missing required parameters for search operation");
+                $crate::communication::JsonRpcServer::error_response(
+                    $request.id,
+                    $crate::communication::JsonRpcError::invalid_params()
+                )
+            }
+        }
+    }};
+}
+
+/// Macro for handling server-side statistics operations with caching support
+#[macro_export]
+macro_rules! handle_statistics_operation {
+    (
+        $request:expr,
+        $operation:expr,
+        $stats_call:expr
+    ) => {{
+        let start_time = std::time::Instant::now();
+        let cache_start = std::time::Instant::now();
+        let result = $stats_call;
+        let cache_duration = cache_start.elapsed();
+        
+        match result {
+            Ok(stats_result) => {
+                match serde_json::to_value(&stats_result) {
+                    Ok(mut json_result) => {
+                        if let serde_json::Value::Object(ref mut obj) = json_result {
+                            obj.insert("cache_metrics".to_string(), serde_json::json!({
+                                "cache_duration_ms": cache_duration.as_millis(),
+                                "total_duration_ms": start_time.elapsed().as_millis(),
+                                "operation": $operation,
+                                "cache_hit": cache_duration.as_millis() < 5, // Assume cache hit if < 5ms
+                                "timestamp": chrono::Utc::now().to_rfc3339()
+                            }));
+                        }
+                        $crate::error_macros::log_performance_metrics(
+                            $operation,
+                            cache_duration,
+                            Some(serde_json::json!({"operation_type": "statistics", "cached": cache_duration.as_millis() < 5}))
+                        );
+                        $crate::communication::JsonRpcServer::success_response($request.id, json_result)
+                    }
+                    Err(e) => {
+                        eprintln!("[ERROR] Failed to serialize statistics result: {}", e);
+                        $crate::communication::JsonRpcServer::error_response(
+                            $request.id,
+                            $crate::communication::JsonRpcError::internal_error()
+                        )
+                    }
+                }
+            }
+            Err(error) => {
+                let context = $crate::error_macros::ErrorContext::new(
+                    $operation,
+                    file!(),
+                    line!(),
+                    column!(),
+                    module_path!()
+                ).with_request_id($request.id.clone())
+                 .with_data("cache_duration_ms", cache_duration.as_millis());
+                let enhanced_error = $crate::error_macros::create_enhanced_error(&error, &context, -1);
+                eprintln!("[ERROR] Statistics operation '{}' failed after {:?}: {}", $operation, cache_duration, error);
+                $crate::communication::JsonRpcServer::error_response($request.id, enhanced_error)
+            }
+        }
+    }};
+}
+
+/// Macro for handling validation operations with context-aware error messages
+#[macro_export]
+macro_rules! handle_validation_operation {
+    (
+        $request:expr,
+        $param_type:ty,
+        $operation:expr,
+        |$params:ident| $validation_call:expr
+    ) => {{
+        match $request.params {
+            Some(params) => {
+                match serde_json::from_value::<$param_type>(params) {
+                    Ok($params) => {
+                        let validation_start = std::time::Instant::now();
+                        let result = $validation_call;
+                        let validation_duration = validation_start.elapsed();
+                        
+                        match result {
+                            Ok(validation_result) => {
+                                match serde_json::to_value(&validation_result) {
+                                    Ok(mut json_result) => {
+                                        if let serde_json::Value::Object(ref mut obj) = json_result {
+                                            obj.insert("validation_metrics".to_string(), serde_json::json!({
+                                                "validation_duration_ms": validation_duration.as_millis(),
+                                                "operation": $operation,
+                                                "timestamp": chrono::Utc::now().to_rfc3339()
+                                            }));
+                                        }
+                                        $crate::communication::JsonRpcServer::success_response($request.id, json_result)
+                                    }
+                                    Err(e) => {
+                                        eprintln!("[ERROR] Failed to serialize validation result: {}", e);
+                                        $crate::communication::JsonRpcServer::error_response(
+                                            $request.id,
+                                            $crate::communication::JsonRpcError::internal_error()
+                                        )
+                                    }
+                                }
+                            }
+                            Err(error) => {
+                                let context = $crate::error_macros::ErrorContext::new(
+                                    $operation,
+                                    file!(),
+                                    line!(),
+                                    column!(),
+                                    module_path!()
+                                ).with_request_id($request.id.clone())
+                                 .with_data("validation_duration_ms", validation_duration.as_millis());
+                                let enhanced_error = $crate::error_macros::create_enhanced_error(&error, &context, -32602);
+                                eprintln!("[ERROR] Validation operation '{}' failed: {}", $operation, error);
+                                $crate::communication::JsonRpcServer::error_response($request.id, enhanced_error)
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!("[ERROR] Parameter parsing failed for validation operation: {}", e);
+                        $crate::communication::JsonRpcServer::error_response(
+                            $request.id,
+                            $crate::communication::JsonRpcError::invalid_params()
+                        )
+                    }
+                }
+            }
+            None => {
+                eprintln!("[ERROR] Missing required parameters for validation operation");
+                $crate::communication::JsonRpcServer::error_response(
+                    $request.id,
+                    $crate::communication::JsonRpcError::invalid_params()
+                )
+            }
+        }
     }};
 }
 

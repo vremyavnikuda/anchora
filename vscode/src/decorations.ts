@@ -5,6 +5,7 @@
 
 import * as vscode from 'vscode';
 import { TaskTreeProvider } from './taskProvider';
+import { NoteTreeProvider } from './noteProvider';
 import { ExtensionConfig, TaskStatus } from './types';
 
 export class DecorationProvider {
@@ -12,6 +13,7 @@ export class DecorationProvider {
     private readonly taskReferenceRegex = /\/\/\s*([a-zA-Z_][a-zA-Z0-9_]*):([a-zA-Z_][a-zA-Z0-9_]*)/g;
     constructor(
         private readonly taskProvider: TaskTreeProvider,
+        private readonly noteProvider: NoteTreeProvider,
         private readonly config: ExtensionConfig
     ) {
         this.createDecorationTypes();
@@ -158,6 +160,15 @@ export class DecorationProvider {
     }
 
     /**
+     * Get notes related to a specific task
+     */
+    private getNotesForTask(section: string, taskId: string) {
+        return (this.noteProvider as any).notes?.filter((note: any) =>
+            note.section === section && note.suggested_task_id === taskId
+        ) || [];
+    }
+
+    /**
      * Create hover message for task reference
      */
     private createHoverMessage(section: string, taskId: string, status: TaskStatus): vscode.MarkdownString {
@@ -165,6 +176,29 @@ export class DecorationProvider {
         markdown.isTrusted = true;
         markdown.appendMarkdown(`**Task:** \`${section}:${taskId}\`\n\n`);
         markdown.appendMarkdown(`**Status:** ${this.getStatusIcon(status)} ${status}\n\n`);
+
+        // Find and display related notes
+        const relatedNotes = this.getNotesForTask(section, taskId);
+        if (relatedNotes.length > 0) {
+            markdown.appendMarkdown(`**Related Notes (${relatedNotes.length}):**\n\n`);
+            for (const note of relatedNotes) {
+                markdown.appendMarkdown(`• **${note.title}**\n`);
+                if (note.content) {
+                    // Truncate long content for hover display
+                    const truncatedContent = note.content.length > 200
+                        ? note.content.substring(0, 200) + '...'
+                        : note.content;
+                    markdown.appendMarkdown(`  ${truncatedContent}\n`);
+                }
+                if (note.is_converted) {
+                    markdown.appendMarkdown(`  ✅ *Converted to task*\n`);
+                } else {
+                    markdown.appendMarkdown(`  📝 *Note created: ${new Date(note.created).toLocaleDateString()}*\n`);
+                }
+                markdown.appendMarkdown(`\n`);
+            }
+        }
+
         markdown.appendMarkdown(
             `[Go to Definition](command:anchora.goToTaskDefinition) | ` +
             `[Find References](command:anchora.findTaskReferences) | ` +

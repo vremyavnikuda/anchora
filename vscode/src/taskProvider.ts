@@ -335,50 +335,92 @@ export class TaskTreeProvider implements vscode.TreeDataProvider<TaskTreeItem> {
     }
 
     /**
-     * Get task count by status for status bar
+     * Get task count by status using server-side statistics for better performance
      */
-    getTaskCounts(): Record<TaskStatus, number> {
-        const counts: Record<TaskStatus, number> = {
-            todo: 0,
-            in_progress: 0,
-            done: 0,
-            blocked: 0
-        };
-        if (!this.projectData) return counts;
-        for (const section of Object.values(this.projectData)) {
-            for (const task of Object.values(section)) {
-                counts[task.status]++;
+    async getTaskCounts(): Promise<Record<TaskStatus, number>> {
+        try {
+            // Use server-side statistics with caching
+            const statistics = await this.client.getStatistics();
+            return statistics.by_status;
+        } catch (error) {
+            console.error('Server-side statistics failed, falling back to client-side:', error);
+
+            // Fallback to original client-side counting
+            const counts: Record<TaskStatus, number> = {
+                todo: 0,
+                in_progress: 0,
+                done: 0,
+                blocked: 0
+            };
+
+            if (!this.projectData) return counts;
+
+            for (const section of Object.values(this.projectData)) {
+                for (const task of Object.values(section)) {
+                    counts[task.status]++;
+                }
             }
+
+            return counts;
         }
-        return counts;
     }
 
     /**
-     * Search tasks by query
+     * Search tasks using server-side indexing for better performance
      */
-    searchTasks(query: string): TaskTreeItem[] {
-        if (!this.projectData || !query.trim()) return [];
-        const lowerQuery = query.toLowerCase();
-        const results: TaskTreeItem[] = [];
-        for (const [sectionName, section] of Object.entries(this.projectData)) {
-            for (const [taskId, task] of Object.entries(section)) {
-                const matches =
-                    task.title.toLowerCase().includes(lowerQuery) ||
-                    (task.description?.toLowerCase().includes(lowerQuery)) ||
-                    taskId.toLowerCase().includes(lowerQuery) ||
-                    sectionName.toLowerCase().includes(lowerQuery);
-                if (matches) {
-                    results.push({
-                        type: 'task',
-                        label: `${sectionName}:${taskId} - ${task.title}`,
-                        section: sectionName,
-                        taskId,
-                        status: task.status,
-                        description: task.description || ''
-                    });
+    async searchTasks(query: string): Promise<TaskTreeItem[]> {
+        if (!query.trim()) return [];
+
+        try {
+            // Use server-side search with indexing
+            const searchResult = await this.client.searchTasks({
+                query: query,
+                filters: {
+                    include_descriptions: true
+                },
+                limit: 50
+            });
+
+            // Convert server results to TaskTreeItem format
+            return searchResult.tasks.map(task => ({
+                type: 'task' as const,
+                label: `${task.section}:${task.task_id} - ${task.title}`,
+                section: task.section,
+                taskId: task.task_id,
+                status: task.status,
+                description: task.description || ''
+            }));
+        } catch (error) {
+            console.error('Server-side search failed, falling back to client-side:', error);
+
+            // Fallback to original client-side search if server fails
+            if (!this.projectData) return [];
+
+            const lowerQuery = query.toLowerCase();
+            const results: TaskTreeItem[] = [];
+
+            for (const [sectionName, section] of Object.entries(this.projectData)) {
+                for (const [taskId, task] of Object.entries(section)) {
+                    const matches =
+                        task.title.toLowerCase().includes(lowerQuery) ||
+                        (task.description?.toLowerCase().includes(lowerQuery)) ||
+                        taskId.toLowerCase().includes(lowerQuery) ||
+                        sectionName.toLowerCase().includes(lowerQuery);
+
+                    if (matches) {
+                        results.push({
+                            type: 'task',
+                            label: `${sectionName}:${taskId} - ${task.title}`,
+                            section: sectionName,
+                            taskId,
+                            status: task.status,
+                            description: task.description || ''
+                        });
+                    }
                 }
             }
+
+            return results.sort((a, b) => a.label.localeCompare(b.label));
         }
-        return results.sort((a, b) => a.label.localeCompare(b.label));
     }
 }

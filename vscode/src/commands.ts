@@ -10,12 +10,8 @@ import { TaskTreeProvider } from './taskProvider';
 import { NoteTreeProvider } from './noteProvider';
 import {
     TaskStatus,
-    CreateTaskParams,
     ScanProjectParams,
     DeleteTaskParams,
-    createTaskId,
-    createSectionName,
-    AnchoraError,
     Note
 } from './types';
 
@@ -96,7 +92,7 @@ export class CommandHandler {
     registerCommands(): void {
         logCommandInfo('Registering commands...');
         const commands = [
-            vscode.commands.registerCommand('anchora.createTask', () => this.createTaskDirect()),
+            vscode.commands.registerCommand('anchora.createTask', () => this.createNote()),
             vscode.commands.registerCommand('anchora.refreshTasks', () => this.refreshTasks()),
             vscode.commands.registerCommand('anchora.scanProject', () => this.scanProject()),
             vscode.commands.registerCommand('anchora.goToTaskDefinition', () => this.goToTaskDefinition()),
@@ -123,113 +119,6 @@ export class CommandHandler {
         ];
         commands.forEach(command => this.context.subscriptions.push(command));
         logCommandInfo(`Registered ${commands.length} commands successfully`);
-    }
-
-    /**
-     * Create a new task directly (bypass note workflow)
-     */
-    private async createTaskDirect(): Promise<void> {
-        logCommandInfo('=== Starting create task workflow ===');
-        try {
-            logCommandDebug('Prompting for section name');
-            const section = await vscode.window.showInputBox({
-                prompt: 'Enter section name (e.g., dev, ref, bug)',
-                placeHolder: 'dev',
-                validateInput: (value) => {
-                    if (!value.trim()) {
-                        return 'Section name cannot be empty';
-                    }
-                    if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(value)) {
-                        return 'Section name must start with letter or underscore and contain only alphanumeric characters and underscores';
-                    }
-                    return undefined;
-                }
-            });
-            if (!section) {
-                logCommandInfo('Create task cancelled - no section provided');
-                return;
-            }
-            logCommandDebug('Section selected', { section });
-            logCommandDebug('Prompting for task ID');
-            const taskId = await vscode.window.showInputBox({
-                prompt: 'Enter task ID',
-                placeHolder: 'task_1',
-                validateInput: (value) => {
-                    if (!value.trim()) {
-                        return 'Task ID cannot be empty';
-                    }
-                    if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(value)) {
-                        return 'Task ID must start with letter or underscore and contain only alphanumeric characters and underscores';
-                    }
-                    return undefined;
-                }
-            });
-            if (!taskId) {
-                logCommandInfo('Create task cancelled - no task ID provided');
-                return;
-            }
-            logCommandDebug('Task ID selected', { taskId });
-            logCommandDebug('Prompting for task title');
-            const title = await vscode.window.showInputBox({
-                prompt: 'Enter task title/description',
-                placeHolder: 'Add new feature for user authentication',
-                validateInput: (value) => {
-                    if (!value.trim()) {
-                        return 'Task title cannot be empty';
-                    }
-                    return undefined;
-                }
-            });
-            if (!title) {
-                logCommandInfo('Create task cancelled - no title provided');
-                return;
-            }
-            logCommandDebug('Title provided', { title });
-            logCommandDebug('Prompting for optional description');
-            const description = await vscode.window.showInputBox({
-                prompt: 'Enter detailed description (optional)',
-                placeHolder: 'Detailed implementation notes...'
-            });
-            logCommandDebug('Description provided', { description: description || 'none' });
-            const validSection = createSectionName(section);
-            const validTaskId = createTaskId(taskId);
-            if (!validSection || !validTaskId) {
-                const validationError = new AnchoraError('Invalid section name or task ID');
-                logCommandError('Validation failed', validationError, { section, taskId, validSection, validTaskId });
-                throw validationError;
-            }
-            const params: CreateTaskParams = {
-                section: validSection,
-                task_id: validTaskId,
-                title: title.trim(),
-                ...(description?.trim() && { description: description.trim() })
-            };
-            logCommandInfo('Creating task via backend', { section: validSection, taskId: validTaskId });
-            logCommandDebug('Create task parameters', params);
-            const result = await this.client.createTask(params);
-            logCommandDebug('Create task result', result);
-            if (result.success) {
-                logCommandInfo(`Task created successfully: ${section}:${taskId}`);
-                vscode.window.showInformationMessage(`Task created: ${section}:${taskId}`);
-                logCommandInfo('Refreshing task provider');
-                await this.taskProvider.loadTasks();
-                logCommandDebug('Prompting for task reference insertion');
-                const insertReference = await vscode.window.showQuickPick(
-                    ['Yes', 'No'],
-                    { placeHolder: 'Insert task reference at current cursor position?' }
-                );
-                if (insertReference === 'Yes') {
-                    logCommandInfo('Inserting task reference at cursor');
-                    await this.insertTaskReference(section, taskId);
-                }
-                logCommandInfo('=== Create task workflow completed successfully ===');
-            } else {
-                logCommandError('Backend reported task creation failure', null, { result });
-                vscode.window.showErrorMessage(`Failed to create task: ${result.message}`);
-            }
-        } catch (error) {
-            this.handleError('create task', error, { workflow: 'createTask' });
-        }
     }
 
     /**
@@ -542,7 +431,7 @@ export class CommandHandler {
     }
 
     /**
-     * Search tasks interactively
+     * Search tasks interactively with server-side performance
      */
     private async searchTasks(): Promise<void> {
         try {
@@ -551,22 +440,28 @@ export class CommandHandler {
                 placeHolder: 'Enter search query...'
             });
             if (!query) return;
-            const results = this.taskProvider.searchTasks(query);
+
+            // Use server-side search for better performance
+            const results = await this.taskProvider.searchTasks(query);
+
             if (results.length === 0) {
                 vscode.window.showInformationMessage(`No tasks found matching "${query}"`);
                 return;
             }
+
             const items = results.map(task => ({
                 label: task.label,
                 description: task.status ? `Status: ${task.status}` : '',
                 detail: task.description || '',
                 task
             }));
+
             const selected = await vscode.window.showQuickPick(items, {
                 placeHolder: `Search results for "${query}" (${results.length} found)`,
                 matchOnDescription: true,
                 matchOnDetail: true
             });
+
             if (selected && selected.task.section && selected.task.taskId) {
                 await this.showTaskReferences(selected.task.section, selected.task.taskId);
             }
@@ -688,18 +583,6 @@ export class CommandHandler {
     }
 
     /**
-     * Insert task reference at current cursor position
-     */
-    private async insertTaskReference(section: string, taskId: string): Promise<void> {
-        const editor = vscode.window.activeTextEditor;
-        if (!editor) return;
-        const reference = `// ${section}:${taskId}`;
-        await editor.edit(editBuilder => {
-            editBuilder.insert(editor.selection.active, reference);
-        });
-    }
-
-    /**
      * Open file at specific line
      */
     private async openFileAtLine(filePath: string, line: number): Promise<void> {
@@ -781,10 +664,8 @@ export class CommandHandler {
                 vscode.window.showInformationMessage('No project data available.');
                 return;
             }
-            if (!projectData.sections || Object.keys(projectData.sections).length === 0) {
-                vscode.window.showInformationMessage('No tasks found in the project.');
-                return;
-            }
+            // Allow overview to open even when no tasks exist
+            // Users should be able to see the overview and potentially create new tasks
             const taskOverview = await this.getTaskOverview();
             await this.showTaskOverviewPanel(taskOverview);
         } catch (error) {
@@ -793,23 +674,14 @@ export class CommandHandler {
     }
 
     /**
-     * View tasks grouped by status
+     * View tasks grouped by status using server-side filtering
      */
     private async viewTasksByStatus(): Promise<void> {
         try {
             if (!this.client.isConnected()) {
                 await this.client.connect();
             }
-            const projectData = await this.client.getTasks();
-            if (!projectData) {
-                vscode.window.showInformationMessage('No project data available.');
-                return;
-            }
-            if (!projectData.sections || Object.keys(projectData.sections).length === 0) {
-                vscode.window.showInformationMessage('No tasks found in the project.');
-                return;
-            }
-            const statusGroups = this.groupTasksByStatus(projectData.sections);
+            const statusGroups = await this.groupTasksByStatus();
             const statusOptions = Object.entries(statusGroups).map(([status, tasks]) => ({
                 label: `${this.getStatusIcon(status as TaskStatus)} ${status.toUpperCase()}`,
                 description: `${tasks.length} tasks`,
@@ -828,37 +700,48 @@ export class CommandHandler {
     }
 
     /**
-     * Group tasks by status
+     * Group tasks by status using server-side filtering for better performance
      */
-    private groupTasksByStatus(projectDataSections: any): Record<TaskStatus, any[]> {
+    private async groupTasksByStatus(): Promise<Record<TaskStatus, any[]>> {
         const groups: Record<TaskStatus, any[]> = {
             todo: [],
             in_progress: [],
             done: [],
             blocked: []
         };
-        for (const [sectionName, section] of Object.entries(projectDataSections)) {
-            for (const [taskId, task] of Object.entries(section as any)) {
-                const taskData = task as any;
-                const status = taskData.status as TaskStatus;
-                if (status in groups) {
-                    groups[status].push({
-                        section: sectionName,
-                        id: taskId,
-                        title: taskData.title,
-                        description: taskData.description,
-                        status: status
-                    });
-                }
+
+        try {
+            // Use server-side filtered search for each status
+            for (const status of ['todo', 'in_progress', 'done', 'blocked'] as TaskStatus[]) {
+                const searchResult = await this.client.searchTasks({
+                    query: '*', // Search all tasks
+                    filters: {
+                        statuses: [status],
+                        include_descriptions: true
+                    },
+                    limit: 1000 // High limit to get all tasks
+                });
+
+                groups[status] = searchResult.tasks.map(task => ({
+                    section: task.section,
+                    id: task.task_id,
+                    title: task.title,
+                    description: task.description,
+                    status: task.status
+                }));
             }
+        } catch (error) {
+            logCommandError('Failed to group tasks by status using server-side filtering', error);
+            // Return empty groups on error
         }
+
         return groups;
     }
 
     /**
      * Show task overview in a webview panel with note creation capability
      */
-    private async showTaskOverviewPanel(overview: any): Promise<void> {
+    private async showTaskOverviewPanel(overview: any, activeTab: string = 'overview'): Promise<void> {
         const panel = vscode.window.createWebviewPanel(
             'anchoraTaskOverview',
             'Anchora Task Overview',
@@ -868,7 +751,7 @@ export class CommandHandler {
                 retainContextWhenHidden: true
             }
         );
-        panel.webview.html = this.getTaskOverviewHtml(overview);
+        panel.webview.html = this.getTaskOverviewHtml(overview, activeTab);
         panel.webview.onDidReceiveMessage(
             async message => {
                 switch (message.command) {
@@ -877,7 +760,7 @@ export class CommandHandler {
                         break;
                     case 'refreshOverview':
                         const newOverview = await this.getTaskOverview();
-                        panel.webview.html = this.getTaskOverviewHtml(newOverview);
+                        panel.webview.html = this.getTaskOverviewHtml(newOverview, activeTab);
                         break;
                 }
             },
@@ -889,7 +772,7 @@ export class CommandHandler {
     /**
      * Generate HTML for task overview with note creation form
      */
-    private getTaskOverviewHtml(overview: any): string {
+    private getTaskOverviewHtml(overview: any, activeTab: string = 'overview'): string {
         return `<!DOCTYPE html>
         <html lang="en">
         <head>
@@ -1070,12 +953,12 @@ export class CommandHandler {
             </div>
             
             <div class="tabs">
-                <button class="tab active" onclick="showTab('overview')">📊 Task Overview</button>
-                <button class="tab" onclick="showTab('create-note')">📝 Create Note</button>
+                <button class="tab ${activeTab === 'overview' ? 'active' : ''}" onclick="showTab('overview')">📊 Task Overview</button>
+                <button class="tab ${activeTab === 'create-note' ? 'active' : ''}" onclick="showTab('create-note')">📝 Create Note</button>
             </div>
             
             <!-- Task Overview Tab -->
-            <div id="overview" class="tab-content active">
+            <div id="overview" class="tab-content ${activeTab === 'overview' ? 'active' : ''}">
                 <div class="stats">
                     <div class="stat-card">
                         <div class="stat-number">${overview.totalSections}</div>
@@ -1104,7 +987,15 @@ export class CommandHandler {
                 </div>
                 
                 <h2>📁 Sections & Tasks</h2>
-                ${overview.sections.map((section: any) => `
+                ${overview.sections.length === 0 ? `
+                    <div class="section">
+                        <div class="section-header">No tasks found</div>
+                        <p style="color: var(--vscode-descriptionForeground); font-style: italic; margin: 10px 0;">
+                            No tasks are currently present in this project. You can create notes using the "Create Note" tab above, 
+                            or add tasks directly to your code files using Anchora's comment syntax.
+                        </p>
+                    </div>
+                ` : overview.sections.map((section: any) => `
                     <div class="section">
                         <div class="section-header">${section.name} (${section.taskCount} tasks)</div>
                         ${section.tasks.map((task: any) => `
@@ -1127,7 +1018,7 @@ export class CommandHandler {
             </div>
             
             <!-- Create Note Tab -->
-            <div id="create-note" class="tab-content">
+            <div id="create-note" class="tab-content ${activeTab === 'create-note' ? 'active' : ''}">
                 <div class="note-form">
                     <h2>📝 Create New Note</h2>
                     <p>Notes are ideas that can be converted into tasks later when you're ready to implement them.</p>
@@ -1184,6 +1075,13 @@ export class CommandHandler {
             
             <script>
                 const vscode = acquireVsCodeApi();
+                
+                // Check if we should open a specific tab
+                const urlParams = new URLSearchParams(window.location.search);
+                const activeTab = urlParams.get('tab');
+                if (activeTab === 'create-note') {
+                    showTab('create-note');
+                }
                 
                 // Tab switching
                 function showTab(tabName) {
@@ -1354,8 +1252,25 @@ export class CommandHandler {
      * Get task overview data for webview
      */
     private async getTaskOverview(): Promise<any> {
-        const projectData = await this.client.getTasks();
-        if (!projectData || !projectData.sections) {
+        try {
+            const serverOverview = await this.client.getTaskOverview();
+            return {
+                totalSections: serverOverview.sections.length,
+                totalTasks: serverOverview.statistics.total_tasks,
+                statusCounts: {
+                    todo: serverOverview.statistics.by_status.todo,
+                    in_progress: serverOverview.statistics.by_status.in_progress,
+                    done: serverOverview.statistics.by_status.done,
+                    blocked: serverOverview.statistics.by_status.blocked
+                },
+                sections: serverOverview.sections.map(section => ({
+                    name: section.name,
+                    taskCount: section.total_tasks,
+                    tasks: section.tasks || []
+                }))
+            };
+        } catch (error) {
+            logCommandError('Failed to get server-side task overview', error);
             return {
                 totalSections: 0,
                 totalTasks: 0,
@@ -1363,41 +1278,6 @@ export class CommandHandler {
                 sections: []
             };
         }
-        let totalTasks = 0;
-        const statusCounts = { todo: 0, in_progress: 0, done: 0, blocked: 0 };
-        const sections = [];
-        for (const [sectionName, sectionTasks] of Object.entries(projectData.sections)) {
-            const tasks = [];
-            let sectionTaskCount = 0;
-            for (const [taskId, task] of Object.entries(sectionTasks as any)) {
-                const taskData = task as any;
-                tasks.push({
-                    id: taskId,
-                    title: taskData.title,
-                    description: taskData.description,
-                    status: taskData.status,
-                    created: taskData.created,
-                    updated: taskData.updated,
-                    fileCount: Object.keys(taskData.files || {}).length
-                });
-                statusCounts[taskData.status as keyof typeof statusCounts]++;
-                sectionTaskCount++;
-                totalTasks++;
-            }
-            if (sectionTaskCount > 0) {
-                sections.push({
-                    name: sectionName,
-                    taskCount: sectionTaskCount,
-                    tasks: tasks
-                });
-            }
-        }
-        return {
-            totalSections: sections.length,
-            totalTasks,
-            statusCounts,
-            sections
-        };
     }
 
     private getStatusIcon(status: TaskStatus): string {
@@ -1571,93 +1451,15 @@ export class CommandHandler {
      * Create a new note interactively
      */
     private async createNote(): Promise<void> {
-        logCommandInfo('=== Starting create note workflow ===');
+        logCommandInfo('Opening Task Overview with Create Note tab');
         try {
-            const title = await vscode.window.showInputBox({
-                prompt: 'Enter note title',
-                placeHolder: 'Brief description of the idea',
-                validateInput: (value) => {
-                    if (!value || value.trim().length === 0) {
-                        return 'Title cannot be empty';
-                    }
-                    if (value.trim().length > 100) {
-                        return 'Title too long (maximum 100 characters)';
-                    }
-                    return null;
-                }
-            });
-            if (!title) {
-                logCommandInfo('Create note cancelled - no title provided');
-                return;
+            if (!this.client.isConnected()) {
+                await this.client.connect();
             }
-            const sections = ['dev', 'bug', 'feature', 'refactor', 'test', 'doc'];
-            const section = await vscode.window.showQuickPick(sections, {
-                placeHolder: 'Select section for the note'
-            });
-            if (!section) {
-                logCommandInfo('Create note cancelled - no section selected');
-                return;
-            }
-            const taskId = await vscode.window.showInputBox({
-                prompt: 'Enter ID for future task',
-                placeHolder: 'task_id (letters, numbers, underscores)',
-                validateInput: (value) => {
-                    if (!value || value.trim().length === 0) {
-                        return 'Task ID cannot be empty';
-                    }
-                    if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(value.trim())) {
-                        return 'Task ID must contain only letters, numbers and underscores, starting with a letter';
-                    }
-                    return null;
-                }
-            });
-            if (!taskId) {
-                logCommandInfo('Create note cancelled - no task ID provided');
-                return;
-            }
-            const statusOptions = [
-                { label: 'todo', description: 'Task awaiting execution' },
-                { label: 'in_progress', description: 'Task in progress' },
-                { label: 'blocked', description: 'Task blocked' }
-            ];
-            const selectedStatus = await vscode.window.showQuickPick(statusOptions, {
-                placeHolder: 'Select suggested task status'
-            });
-            if (!selectedStatus) {
-                logCommandInfo('Create note cancelled - no status selected');
-                return;
-            }
-            const content = await vscode.window.showInputBox({
-                prompt: 'Enter detailed note content',
-                placeHolder: 'Detailed description of the idea, approaches, requirements...',
-                validateInput: (value) => {
-                    if (!value || value.trim().length === 0) {
-                        return 'Content cannot be empty';
-                    }
-                    return null;
-                }
-            });
-            if (!content) {
-                logCommandInfo('Create note cancelled - no content provided');
-                return;
-            }
-            const response = await this.client.createNote({
-                title: title.trim(),
-                content: content.trim(),
-                section,
-                suggested_task_id: taskId.trim(),
-                suggested_status: selectedStatus.label as TaskStatus
-            });
-            if (response.success) {
-                vscode.window.showInformationMessage(`Note "${title}" created successfully!`);
-                this.noteProvider.refresh();
-                logCommandInfo(`Note created successfully: ${response.note_id}`);
-            } else {
-                vscode.window.showErrorMessage(`Error creating note: ${response.message}`);
-                logCommandError('Failed to create note', response);
-            }
+            const taskOverview = await this.getTaskOverview();
+            await this.showTaskOverviewPanel(taskOverview, 'create-note');
         } catch (error) {
-            this.handleError('create note', error);
+            this.handleError('open create note', error);
         }
     }
 

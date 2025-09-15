@@ -27,15 +27,15 @@ export class StatusBarManager {
      */
     register(context: vscode.ExtensionContext): void {
         context.subscriptions.push(this.statusBarItem, this.currentTaskItem);
-        this.refresh();
+        this.refresh().catch(error => console.error('Error during initial status bar refresh:', error));
     }
 
     /**
      * Refresh status bar with current task statistics
      */
-    refresh(): void {
+    async refresh(): Promise<void> {
         try {
-            const taskCounts = this.taskProvider.getTaskCounts();
+            const taskCounts = await this.taskProvider.getTaskCounts();
             this.updateTaskStatistics(taskCounts);
             this.statusBarItem.show();
         } catch (error) {

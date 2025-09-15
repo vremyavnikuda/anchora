@@ -84,7 +84,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         logInfo('Loading extension configuration...');
         const config = getExtensionConfig();
         logDebug(`Config: ${JSON.stringify(config)}`);
-        const binaryPath = getBinaryPath(workspacePath);
+        const binaryPath = getBinaryPath();
         logInfo(`Binary path: ${binaryPath}`);
         const client = new JsonRpcClient(workspacePath, binaryPath);
         logInfo('Initializing providers and managers...');
@@ -92,7 +92,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         const noteProvider = new NoteTreeProvider(client);
         const welcomeProvider = new WelcomeViewProvider();
         const commandHandler = new CommandHandler(client, taskProvider, noteProvider, context);
-        const decorationProvider = new DecorationProvider(taskProvider, config);
+        const decorationProvider = new DecorationProvider(taskProvider, noteProvider, config);
         const statusBarManager = new StatusBarManager(taskProvider);
         logInfo('Registering tree data providers...');
         const treeView = vscode.window.createTreeView('anchoraTaskTree', {
@@ -297,21 +297,14 @@ function getExtensionConfig(): ExtensionConfig {
 /**
  * Get the path to the Anchora binary
  */
-function getBinaryPath(workspacePath: string): string {
+function getBinaryPath(): string {
     const binaryName = process.platform === 'win32' ? 'anchora.exe' : 'anchora';
     logDebug(`Platform: ${process.platform}, binary name: ${binaryName}`);
-    const extensionBinaryPath = path.join(__dirname, '..', 'server', binaryName);
-    logDebug(`Extension binary path: ${extensionBinaryPath}`);
-    const fallbackPaths = [
-        path.join(workspacePath, 'target', 'release', binaryName),
-        path.join(workspacePath, 'target', 'debug', binaryName),
-        path.join(workspacePath, binaryName)
-    ];
-    const allPaths = [extensionBinaryPath, ...fallbackPaths];
-    logDebug(`All possible binary paths: ${JSON.stringify(allPaths)}`);
-    const selectedPath = allPaths[0] || 'anchora';
-    logInfo(`Selected binary path: ${selectedPath}`);
-    return selectedPath;
+
+    // Use server directory within the extension
+    const serverPath = path.join(__dirname, '..', 'server', binaryName);
+    logInfo(`Using binary path: ${serverPath}`);
+    return serverPath;
 }
 
 /**

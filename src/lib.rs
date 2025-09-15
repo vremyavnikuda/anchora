@@ -4,6 +4,10 @@ pub mod storage;
 pub mod communication;
 pub mod file_watcher;
 pub mod error_macros;
+pub mod search_engine;
+pub mod statistics;
+pub mod validation;
+pub mod handler;
 
 pub use task_manager::{
     Task, TaskStatus, ProjectData, TaskSection, TaskIndex, ProjectMeta, TaskFile, Note
@@ -22,12 +26,32 @@ pub use communication::{
     ScanProjectParams, ScanProjectResult, GetTasksParams, UpdateTaskStatusParams,
     CreateTaskParams, DeleteTaskParams, FindTaskReferencesParams, TaskReference,
     CreateNoteParams, CreateNoteResponse, GenerateLinkParams, DeleteNoteParams, 
-    GenerateLinkResponse, BasicResponse
+    GenerateLinkResponse, BasicResponse,
+    // New server-side operation parameters
+    SearchTasksParams, GetStatisticsParams, GetTaskOverviewParams, ValidateTaskParams,
+    GetSuggestionsParams, GetFileDecorationsParams, GetFilteredTasksParams, CheckConflictsParams
 };
 
 pub use file_watcher::{
     FileWatcher, FileEvent, WatcherConfig, WatcherStats, EventDebouncer
 };
+
+pub use search_engine::{
+    SearchEngine, SearchQuery, SearchFilters, SearchResult, TaskSearchResult, 
+    Suggestion, SuggestionType, MatchType
+};
+
+pub use statistics::{
+    StatisticsManager, TaskStatistics, SectionStats, TaskUpdate, TaskOverview,
+    SectionSummary, TaskActivity, StatisticsConfig, ChangeType, ActivityType
+};
+
+pub use validation::{
+    ValidationEngine, ValidationParams, ValidationResult, ValidationError, 
+    ValidationWarning, ConflictCheck, Conflict, ValidationConfig
+};
+
+pub use handler::TaskManagerHandler;
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 pub const NAME: &str = env!("CARGO_PKG_NAME");

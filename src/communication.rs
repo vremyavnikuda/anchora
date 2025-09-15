@@ -171,6 +171,62 @@ pub struct BasicResponse {
     pub message: String,
 }
 
+// New server-side operation parameters
+#[derive(Debug, Deserialize)]
+pub struct SearchTasksParams {
+    pub query: String,
+    pub filters: Option<serde_json::Value>,
+    pub limit: Option<usize>,
+    pub offset: Option<usize>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct GetStatisticsParams {
+    pub include_trends: Option<bool>,
+    pub section_filter: Option<Vec<String>>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct GetTaskOverviewParams {
+    pub include_recent_activity: Option<bool>,
+    pub activity_limit: Option<usize>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ValidateTaskParams {
+    pub section: String,
+    pub task_id: String,
+    pub title: Option<String>,
+    pub description: Option<String>,
+    pub check_duplicates: Option<bool>,
+    pub suggest_alternatives: Option<bool>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct GetSuggestionsParams {
+    pub partial_query: String,
+    pub context: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct GetFileDecorationsParams {
+    pub file_paths: Vec<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct GetFilteredTasksParams {
+    pub sections: Option<Vec<String>>,
+    pub statuses: Option<Vec<String>>,
+    pub created_after: Option<String>,
+    pub updated_after: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CheckConflictsParams {
+    pub section: String,
+    pub task_id: String,
+}
+
 pub trait JsonRpcHandler: Send + Sync {
     fn handle_request(&self, request: JsonRpcRequest) -> std::pin::Pin<Box<dyn std::future::Future<Output = JsonRpcResponse> + Send + '_>>;
 }

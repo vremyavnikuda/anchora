@@ -24,7 +24,18 @@ import {
     CreateNoteParams,
     CreateNoteResponse,
     GenerateLinkResponse,
-    BasicResponse
+    BasicResponse,
+    // New server-side API types
+    SearchTasksParams,
+    SearchResult,
+    TaskStatistics,
+    TaskOverview,
+    ValidateTaskParams,
+    ValidationResult,
+    GetSuggestionsParams,
+    TaskSuggestion,
+    CheckConflictsParams,
+    ConflictCheck
 } from './types';
 
 let clientOutputChannel: vscode.OutputChannel | null = null;
@@ -422,14 +433,11 @@ export class JsonRpcClient {
      * Get the default path to the Anchora binary
      */
     private getDefaultBinaryPath(): string {
-        const possiblePaths = [
-            path.join(this.workspacePath, 'target', 'release', 'anchora.exe'),
-            path.join(this.workspacePath, 'target', 'debug', 'anchora.exe'),
-            path.join(this.workspacePath, 'anchora.exe'),
-            'anchora.exe',
-            'anchora'
-        ];
-        return possiblePaths[0] || 'anchora';
+        const binaryName = process.platform === 'win32' ? 'anchora.exe' : 'anchora';
+        // Use server directory within the extension
+        const serverPath = path.join(__dirname, '..', 'server', binaryName);
+        logClientInfo(`Using default binary path: ${serverPath}`);
+        return serverPath;
     }
 
     // API Methods
@@ -472,5 +480,49 @@ export class JsonRpcClient {
 
     async deleteNote(noteId: string): Promise<BasicResponse> {
         return await this.sendRequest('delete_note', { note_id: noteId }) as BasicResponse;
+    }
+
+    // New server-side API methods
+
+    /**
+     * Search tasks using server-side indexing and filtering
+     */
+    async searchTasks(params: SearchTasksParams): Promise<SearchResult> {
+        return await this.sendRequest('search_tasks', params) as SearchResult;
+    }
+
+    /**
+     * Get comprehensive task statistics from server cache
+     */
+    async getStatistics(): Promise<TaskStatistics> {
+        return await this.sendRequest('get_statistics') as TaskStatistics;
+    }
+
+    /**
+     * Get complete task overview for dashboard
+     */
+    async getTaskOverview(): Promise<TaskOverview> {
+        return await this.sendRequest('get_task_overview') as TaskOverview;
+    }
+
+    /**
+     * Validate task input with smart suggestions
+     */
+    async validateTaskInput(params: ValidateTaskParams): Promise<ValidationResult> {
+        return await this.sendRequest('validate_task_input', params) as ValidationResult;
+    }
+
+    /**
+     * Get smart suggestions for auto-completion
+     */
+    async getSuggestions(params: GetSuggestionsParams): Promise<ReadonlyArray<TaskSuggestion>> {
+        return await this.sendRequest('get_suggestions', params) as ReadonlyArray<TaskSuggestion>;
+    }
+
+    /**
+     * Check for task conflicts and get resolution suggestions
+     */
+    async checkTaskConflicts(params: CheckConflictsParams): Promise<ConflictCheck> {
+        return await this.sendRequest('check_task_conflicts', params) as ConflictCheck;
     }
 }
