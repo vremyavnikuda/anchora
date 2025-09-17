@@ -2,7 +2,7 @@
 
 > [Русская версия / Russian Version](doc/README_RU_VSCODE.md)
 
-> [CHANGELOG](CHANGELOG.md) for detailed release notes and version history.
+> [CHANGELOG](vscode/CHANGELOG.md) for detailed release notes and version history.
 
 ## What is it?
 
