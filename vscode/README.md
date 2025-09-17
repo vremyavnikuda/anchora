@@ -1,7 +1,5 @@
 # Anchora - VSCode Extension
 
-> [Русская версия / Russian Version](doc/README_RU_VSCODE.md)
-
 > [CHANGELOG](https://github.com/vremyavnikuda/anchora/blob/master/vscode/CHANGELOG.md) for detailed release notes and version history.
 
 ## What is it?

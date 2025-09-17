@@ -1,6 +1,8 @@
 # Anchora - Developer Task Management
 > [Русская версия / Russian Version](doc/README_RU.md)
 
+> [CHANGELOG](https://github.com/vremyavnikuda/anchora/blob/master/vscode/CHANGELOG.md) for detailed release notes and version history.
+
 Anchora is a VSCode extension that transforms code comments into a full-featured task management system. Instead of external task trackers, all tasks live directly in your code where they belong.
 
 ## Core Functionality
