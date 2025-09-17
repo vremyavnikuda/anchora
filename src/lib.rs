@@ -1,54 +1,69 @@
-pub mod task_manager;
-pub mod file_parser;
-pub mod storage;
 pub mod communication;
-pub mod file_watcher;
 pub mod error_macros;
+pub mod file_parser;
+pub mod file_watcher;
+pub mod handler;
 pub mod search_engine;
 pub mod statistics;
+pub mod storage;
+pub mod task_manager;
 pub mod validation;
-pub mod handler;
 
 pub use task_manager::{
-    Task, TaskStatus, ProjectData, TaskSection, TaskIndex, ProjectMeta, TaskFile, Note
+    Note, ProjectData, ProjectMeta, Task, TaskFile, TaskIndex, TaskSection, TaskStatus,
 };
 
-pub use file_parser::{
-    TaskParser, ParsedTaskLabel, ScanResult
-};
+pub use file_parser::{ParsedTaskLabel, ScanResult, TaskParser};
 
-pub use storage::{
-    StorageManager, StorageInfo
-};
+pub use storage::{StorageInfo, StorageManager};
 
 pub use communication::{
-    JsonRpcRequest, JsonRpcResponse, JsonRpcError, JsonRpcHandler, JsonRpcServer, JsonRpcClient,
-    ScanProjectParams, ScanProjectResult, GetTasksParams, UpdateTaskStatusParams,
-    CreateTaskParams, DeleteTaskParams, FindTaskReferencesParams, TaskReference,
-    CreateNoteParams, CreateNoteResponse, GenerateLinkParams, DeleteNoteParams, 
-    GenerateLinkResponse, BasicResponse,
+    BasicResponse,
+    CheckConflictsParams,
+    CreateNoteParams,
+    CreateNoteResponse,
+    CreateTaskParams,
+    DeleteNoteParams,
+    DeleteTaskParams,
+    FindTaskReferencesParams,
+    GenerateLinkParams,
+    GenerateLinkResponse,
+    GetFileDecorationsParams,
+    GetFilteredTasksParams,
+    GetStatisticsParams,
+    GetSuggestionsParams,
+    GetTaskOverviewParams,
+    GetTasksParams,
+    JsonRpcClient,
+    JsonRpcError,
+    JsonRpcHandler,
+    JsonRpcRequest,
+    JsonRpcResponse,
+    JsonRpcServer,
+    ScanProjectParams,
+    ScanProjectResult,
     // New server-side operation parameters
-    SearchTasksParams, GetStatisticsParams, GetTaskOverviewParams, ValidateTaskParams,
-    GetSuggestionsParams, GetFileDecorationsParams, GetFilteredTasksParams, CheckConflictsParams
+    SearchTasksParams,
+    TaskReference,
+    UpdateTaskStatusParams,
+    ValidateTaskParams,
 };
 
-pub use file_watcher::{
-    FileWatcher, FileEvent, WatcherConfig, WatcherStats, EventDebouncer
-};
+pub use file_watcher::{EventDebouncer, FileEvent, FileWatcher, WatcherConfig, WatcherStats};
 
 pub use search_engine::{
-    SearchEngine, SearchQuery, SearchFilters, SearchResult, TaskSearchResult, 
-    Suggestion, SuggestionType, MatchType
+    MatchType, SearchEngine, SearchFilters, SearchQuery, SearchResult, Suggestion, SuggestionType,
+    TaskSearchResult,
 };
 
 pub use statistics::{
-    StatisticsManager, TaskStatistics, SectionStats, TaskUpdate, TaskOverview,
-    SectionSummary, TaskActivity, StatisticsConfig, ChangeType, ActivityType
+    ActivityType, ChangeType, SectionStats, SectionSummary, StatisticsConfig, StatisticsManager,
+    TaskActivity, TaskOverview, TaskStatistics, TaskUpdate,
 };
 
 pub use validation::{
-    ValidationEngine, ValidationParams, ValidationResult, ValidationError, 
-    ValidationWarning, ConflictCheck, Conflict, ValidationConfig
+    Conflict, ConflictCheck, ValidationConfig, ValidationEngine, ValidationError, ValidationParams,
+    ValidationResult, ValidationWarning,
 };
 
 pub use handler::TaskManagerHandler;

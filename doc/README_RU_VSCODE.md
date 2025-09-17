@@ -106,7 +106,7 @@ Anchora — это расширение для VSCode, которое позво
 
 ### Ис VSIX пакета
 ```bash
-code --install-extension anchora-0.1.0.vsix
+code --install-extension anchora-0.1.1.vsix
 ```
 
 ### Инициализация проекта

@@ -7,7 +7,6 @@
  * - Statistics caching
  * - Performance monitoring
  */
-
 use std::collections::{HashMap, HashSet};
 use std::sync::RwLock;
 use std::time::Instant;
@@ -15,7 +14,6 @@ use serde::{Deserialize, Serialize};
 use chrono::{DateTime, Utc};
 use crate::task_manager::{ProjectData, TaskStatus, Task};
 use anyhow::Result;
-
 /// Search query parameters with filtering options
 #[derive(Debug, Deserialize)]
 pub struct SearchQuery {
@@ -24,7 +22,6 @@ pub struct SearchQuery {
     pub limit: Option<usize>,
     pub offset: Option<usize>,
 }
-
 /// Advanced filtering options for search
 #[derive(Debug, Deserialize)]
 pub struct SearchFilters {
@@ -35,7 +32,6 @@ pub struct SearchFilters {
     pub created_after: Option<DateTime<Utc>>,
     pub updated_after: Option<DateTime<Utc>>,
 }
-
 /// Search result with metadata
 #[derive(Debug, Serialize)]
 pub struct SearchResult {
@@ -45,7 +41,6 @@ pub struct SearchResult {
     pub search_time_ms: u64,
     pub suggestions: Vec<String>,
 }
-
 /// Individual task in search results
 #[derive(Debug, Serialize, Clone)]
 pub struct TaskSearchResult {
@@ -60,7 +55,6 @@ pub struct TaskSearchResult {
     pub relevance: f32,
     pub match_type: MatchType,
 }
-
 /// Type of match found during search
 #[derive(Debug, Serialize, Clone)]
 pub enum MatchType {
@@ -71,7 +65,6 @@ pub enum MatchType {
     #[serde(rename = "fuzzy")]
     Fuzzy,
 }
-
 /// Search suggestion with metadata
 #[derive(Debug, Serialize)]
 pub struct Suggestion {
@@ -80,7 +73,6 @@ pub struct Suggestion {
     pub relevance: f32,
     pub frequency: u32,
 }
-
 /// Type of suggestion
 #[derive(Debug, Serialize)]
 pub enum SuggestionType {
@@ -93,7 +85,6 @@ pub enum SuggestionType {
     #[serde(rename = "status")]
     Status,
 }
-
 /// Search index for fast lookups
 #[derive(Debug)]
 struct SearchIndex {
@@ -110,7 +101,6 @@ struct SearchIndex {
     /// Last update timestamp
     last_updated: DateTime<Utc>,
 }
-
 /// Internal task reference for indexing
 #[derive(Debug, Clone)]
 struct TaskReference {
@@ -123,13 +113,11 @@ struct TaskReference {
     pub updated: DateTime<Utc>,
     pub keywords: Vec<String>,
 }
-
 /// Main search engine with caching and indexing
 pub struct SearchEngine {
     index: RwLock<SearchIndex>,
     performance_stats: RwLock<PerformanceStats>,
 }
-
 /// Performance statistics for monitoring
 #[derive(Debug, Default)]
 struct PerformanceStats {
@@ -139,7 +127,6 @@ struct PerformanceStats {
     index_rebuilds: u64,
     last_index_rebuild: Option<DateTime<Utc>>,
 }
-
 impl SearchEngine {
     /// Create a new search engine instance
     pub fn new() -> Self {
@@ -148,12 +135,10 @@ impl SearchEngine {
             performance_stats: RwLock::new(PerformanceStats::default()),
         }
     }
-
     /// Build search index from project data
     pub fn index_project(&self, project_data: &ProjectData) -> Result<()> {
         let start_time = Instant::now();
         let mut index = self.index.write().map_err(|_| anyhow::anyhow!("Failed to acquire write lock on search index"))?;
-        
         index.clear();
         for (section_name, section) in &project_data.sections {
             for (task_id, task) in section {
@@ -181,25 +166,19 @@ impl SearchEngine {
             stats.index_rebuilds += 1;
             stats.last_index_rebuild = Some(Utc::now());
         }
-        
         let duration = start_time.elapsed();
         eprintln!("[INFO] Search index rebuilt in {:?} with {} tasks", duration, index.task_index.len());
-        
         Ok(())
     }
-
     /// Perform search with the given query and filters
     pub fn search(&self, query: &SearchQuery) -> Result<SearchResult> {
         let start_time = Instant::now();
         let index = self.index.read().map_err(|_| anyhow::anyhow!("Failed to acquire read lock on search index"))?;
-        
         let mut results = Vec::new();
         let query_lower = query.query.to_lowercase();
-        
         for (_task_id, task_ref) in &index.task_index {
             let mut matches = false;
             let mut match_type = MatchType::Fuzzy;
-            
             if task_ref.title.to_lowercase().contains(&query_lower) {
                 matches = true;
                 if task_ref.title.to_lowercase() == query_lower {
@@ -208,13 +187,11 @@ impl SearchEngine {
                     match_type = MatchType::Partial;
                 }
             }
-            
             if let Some(desc) = &task_ref.description {
                 if desc.to_lowercase().contains(&query_lower) {
                     matches = true;
                 }
             }
-            
             if matches {
                 results.push(TaskSearchResult {
                     section: task_ref.section.clone(),
@@ -230,7 +207,6 @@ impl SearchEngine {
                 });
             }
         }
-        
         if let Some(filters) = &query.filters {
             if let Some(statuses) = &filters.statuses {
                 results.retain(|r| statuses.contains(&r.status));
@@ -239,26 +215,20 @@ impl SearchEngine {
                 results.retain(|r| sections.contains(&r.section));
             }
         }
-        
         let total_count = results.len() as u32;
-        
         let offset = query.offset.unwrap_or(0);
         let limit = query.limit.unwrap_or(50);
-        
         if offset < results.len() {
             let end = std::cmp::min(offset + limit, results.len());
             results = results[offset..end].to_vec();
         } else {
             results.clear();
         }
-        
         let search_time = start_time.elapsed();
-        
         if let Ok(mut stats) = self.performance_stats.write() {
             stats.total_searches += 1;
             stats.total_search_time_ms += search_time.as_millis() as u64;
         }
-        
         Ok(SearchResult {
             tasks: results,
             total_count,
@@ -267,13 +237,11 @@ impl SearchEngine {
             suggestions: vec![],
         })
     }
-
     /// Get suggestions for partial query
     pub fn get_suggestions(&self, partial_query: &str) -> Result<Vec<Suggestion>> {
         let index = self.index.read().map_err(|_| anyhow::anyhow!("Failed to acquire read lock on search index"))?;
         let mut suggestions = Vec::new();
         let query_lower = partial_query.to_lowercase();
-        
         for section_name in index.section_index.keys() {
             if section_name.to_lowercase().starts_with(&query_lower) {
                 suggestions.push(Suggestion {
@@ -284,7 +252,6 @@ impl SearchEngine {
                 });
             }
         }
-        
         for task_ref in index.task_index.values() {
             if task_ref.task_id.to_lowercase().starts_with(&query_lower) {
                 suggestions.push(Suggestion {
@@ -295,29 +262,24 @@ impl SearchEngine {
                 });
             }
         }
-        
         suggestions.sort_by(|a, b| {
             b.relevance.partial_cmp(&a.relevance)
                 .unwrap_or(std::cmp::Ordering::Equal)
                 .then(b.frequency.cmp(&a.frequency))
         });
-        
         suggestions.truncate(10);
         
         Ok(suggestions)
     }
-
     /// Get performance statistics
     pub fn get_performance_stats(&self) -> Result<serde_json::Value> {
         let stats = self.performance_stats.read().map_err(|_| anyhow::anyhow!("Failed to acquire read lock on performance stats"))?;
         let index = self.index.read().map_err(|_| anyhow::anyhow!("Failed to acquire read lock on search index"))?;
-        
         let avg_search_time = if stats.total_searches > 0 {
             stats.total_search_time_ms as f64 / stats.total_searches as f64
         } else {
             0.0
         };
-        
         Ok(serde_json::json!({
             "total_searches": stats.total_searches,
             "avg_search_time_ms": avg_search_time,
@@ -330,7 +292,6 @@ impl SearchEngine {
         }))
     }
 }
-
 impl SearchIndex {
     fn new() -> Self {
         Self {
@@ -342,7 +303,6 @@ impl SearchIndex {
             last_updated: Utc::now(),
         }
     }
-    
     fn clear(&mut self) {
         self.task_index.clear();
         self.word_index.clear();
@@ -351,11 +311,9 @@ impl SearchIndex {
         self.suggestion_cache.clear();
     }
 }
-
 impl TaskReference {
     fn from_task(section: &str, task_id: &str, task: &Task) -> Self {
         let mut keywords = Vec::new();
-        
         keywords.extend(
             task.title
                 .to_lowercase()
@@ -363,7 +321,6 @@ impl TaskReference {
                 .filter(|w| w.len() > 2)
                 .map(String::from)
         );
-        
         if let Some(desc) = &task.description {
             keywords.extend(
                 desc.to_lowercase()
@@ -372,13 +329,10 @@ impl TaskReference {
                     .map(String::from)
             );
         }
-        
         keywords.push(section.to_lowercase());
         keywords.push(task_id.to_lowercase());
-        
         keywords.sort();
         keywords.dedup();
-        
         Self {
             section: section.to_string(),
             task_id: task_id.to_string(),
@@ -391,26 +345,21 @@ impl TaskReference {
         }
     }
 }
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::task_manager::Task;
-
     #[test]
     fn test_search_engine_creation() {
         let engine = SearchEngine::new();
         let stats = engine.get_performance_stats().unwrap();
         assert_eq!(stats["total_searches"], 0);
     }
-
     #[test]
     fn test_task_reference_creation() {
         let mut task = Task::new("Test task".to_string(), Some("Test description".to_string()));
         task.status = TaskStatus::Todo;
-        
         let task_ref = TaskReference::from_task("test_section", "test_task", &task);
-        
         assert_eq!(task_ref.section, "test_section");
         assert_eq!(task_ref.task_id, "test_task");
         assert_eq!(task_ref.title, "Test task");

@@ -1,4 +1,4 @@
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::sync::mpsc;
@@ -75,7 +75,11 @@ impl JsonRpcError {
     }
 
     pub fn custom(code: i32, message: String, data: Option<Value>) -> Self {
-        Self { code, message, data }
+        Self {
+            code,
+            message,
+            data,
+        }
     }
 }
 
@@ -89,6 +93,7 @@ pub struct ScanProjectParams {
 pub struct ScanProjectResult {
     pub files_scanned: u32,
     pub tasks_found: u32,
+    pub tasks_removed: u32,
     pub errors: Vec<String>,
 }
 
@@ -228,7 +233,10 @@ pub struct CheckConflictsParams {
 }
 
 pub trait JsonRpcHandler: Send + Sync {
-    fn handle_request(&self, request: JsonRpcRequest) -> std::pin::Pin<Box<dyn std::future::Future<Output = JsonRpcResponse> + Send + '_>>;
+    fn handle_request(
+        &self,
+        request: JsonRpcRequest,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = JsonRpcResponse> + Send + '_>>;
 }
 
 pub struct JsonRpcServer {
@@ -322,7 +330,11 @@ pub struct JsonRpcClient {
 }
 
 impl JsonRpcClient {
-    pub fn new() -> (Self, mpsc::UnboundedSender<String>, mpsc::UnboundedReceiver<String>) {
+    pub fn new() -> (
+        Self,
+        mpsc::UnboundedSender<String>,
+        mpsc::UnboundedReceiver<String>,
+    ) {
         let (request_tx, request_rx) = mpsc::unbounded_channel();
         let (response_tx, response_rx) = mpsc::unbounded_channel();
         let client = Self {

@@ -2,6 +2,8 @@
 
 > [Русская версия / Russian Version](doc/README_RU_VSCODE.md)
 
+> [CHANGELOG](CHANGELOG.md) for detailed release notes and version history.
+
 ## What is it?
 
 Anchora is a VSCode extension that allows you to manage tasks directly in your code. Instead of external task trackers, you write tasks in code comments, and the extension automatically tracks and visualizes them.
@@ -114,7 +116,7 @@ Or search for "Anchora" in the VS Code Extensions view (`Ctrl+Shift+X`).
 
 ### From VSIX Package
 ```bash
-code --install-extension anchora-0.1.0.vsix
+code --install-extension anchora-0.1.1.vsix
 ```
 
 ### Project Initialization
@@ -148,6 +150,7 @@ Happens automatically when opening a project. Creates `.anchora/` folder with `t
 
 ## Configuration
 You can configure file patterns, ignored folders, and status colors in VSCode settings.
+
 
 ## License
 Apache License 2.0 - See [LICENSE](../LICENSE) for details.

@@ -1,24 +1,22 @@
 /*!
  * Task Manager Handler Module
- * 
+ *
  * Contains the main business logic for handling JSON-RPC requests
  * and managing task operations.
  */
-
 use crate::{
-    file_parser, CreateTaskParams, DeleteTaskParams, FindTaskReferencesParams, GetTasksParams,
-    JsonRpcError, JsonRpcHandler, JsonRpcRequest, JsonRpcResponse, JsonRpcServer, ScanProjectParams,
-    ScanProjectResult, TaskParser, TaskReference, TaskStatus, UpdateTaskStatusParams, CreateNoteParams,
-    CreateNoteResponse, GenerateLinkParams, DeleteNoteParams, GenerateLinkResponse, BasicResponse, Note,
-    SearchEngine, SearchQuery, StatisticsManager, ValidationEngine,
-    SearchTasksParams, ValidateTaskParams,
-    GetSuggestionsParams, CheckConflictsParams, ValidationParams
+    BasicResponse, CheckConflictsParams, CreateNoteParams, CreateNoteResponse, CreateTaskParams,
+    DeleteNoteParams, DeleteTaskParams, FindTaskReferencesParams, GenerateLinkParams,
+    GenerateLinkResponse, GetSuggestionsParams, GetTasksParams, JsonRpcError, JsonRpcHandler,
+    JsonRpcRequest, JsonRpcResponse, JsonRpcServer, Note, ScanProjectParams, ScanProjectResult,
+    SearchEngine, SearchQuery, SearchTasksParams, StatisticsManager, TaskParser, TaskReference,
+    TaskStatus, UpdateTaskStatusParams, ValidateTaskParams, ValidationEngine, ValidationParams,
+    file_parser,
 };
-use crate::{handle_jsonrpc_method, handle_simple_method, handle_parameterized_method};
+use crate::{handle_jsonrpc_method, handle_parameterized_method, handle_simple_method};
+use chrono;
 use std::path::PathBuf;
 use std::sync::Arc;
-use chrono;
-
 pub struct TaskManagerHandler {
     storage: Arc<crate::StorageManager>,
     parser: Arc<TaskParser>,
@@ -26,7 +24,6 @@ pub struct TaskManagerHandler {
     statistics_manager: Arc<StatisticsManager>,
     validation_engine: Arc<ValidationEngine>,
 }
-
 impl TaskManagerHandler {
     pub fn new(workspace_path: PathBuf) -> anyhow::Result<Self> {
         let storage = Arc::new(crate::StorageManager::new(&workspace_path));
@@ -34,20 +31,20 @@ impl TaskManagerHandler {
         let search_engine = Arc::new(SearchEngine::new());
         let statistics_manager = Arc::new(StatisticsManager::new(None));
         let validation_engine = Arc::new(ValidationEngine::new(None));
-        
-        Ok(Self { 
-            storage, 
+        Ok(Self {
+            storage,
             parser,
             search_engine,
             statistics_manager,
             validation_engine,
         })
     }
-
-    pub async fn scan_project(&self, params: ScanProjectParams) -> anyhow::Result<ScanProjectResult> {
+    pub async fn scan_project(
+        &self,
+        params: ScanProjectParams,
+    ) -> anyhow::Result<ScanProjectResult> {
         let workspace_path = PathBuf::from(&params.workspace_path);
         let mut project_data = self.storage.load_project_data().await?;
-        
         let mut scan_result = file_parser::ScanResult::new();
         let file_patterns = params.file_patterns.unwrap_or_else(|| {
             vec![
@@ -116,25 +113,46 @@ impl TaskManagerHandler {
                 "**/*.tex".to_string(),
             ]
         });
-
         self.scan_directory_recursive(
-            &workspace_path, 
             &workspace_path,
-            &file_patterns, 
-            &mut project_data, 
-            &mut scan_result
-        ).await?;
+            &workspace_path,
+            &file_patterns,
+            &mut project_data,
+            &mut scan_result,
+        )
+        .await?;
+
+        // Step 3: Remove tasks that have no file references (cleanup)
+        let mut tasks_to_remove = Vec::new();
+        for (section_name, section) in &project_data.sections {
+            for (task_id, task) in section {
+                // Remove task if it has no files or all files have no lines
+                if task.files.is_empty()
+                    || task
+                        .files
+                        .iter()
+                        .all(|(_, task_file)| task_file.lines.is_empty())
+                {
+                    tasks_to_remove.push((section_name.clone(), task_id.clone()));
+                }
+            }
+        }
+
+        // Remove orphaned tasks
+        for (section, task_id) in &tasks_to_remove {
+            let _ = project_data.delete_task(section, task_id);
+            scan_result.tasks_removed += 1;
+        }
 
         project_data.rebuild_index();
         self.storage.save_project_data(&project_data).await?;
-
         Ok(ScanProjectResult {
             files_scanned: scan_result.files_scanned,
             tasks_found: scan_result.tasks_found,
+            tasks_removed: scan_result.tasks_removed,
             errors: scan_result.errors,
         })
     }
-
     async fn scan_directory_recursive(
         &self,
         current_path: &PathBuf,
@@ -144,10 +162,17 @@ impl TaskManagerHandler {
         scan_result: &mut file_parser::ScanResult,
     ) -> anyhow::Result<()> {
         let ignored_dirs = [
-            "target", "node_modules", ".git", ".vscode", ".anchora", 
-            "dist", "build", "__pycache__", ".idea", "out"
+            "target",
+            "node_modules",
+            ".git",
+            ".vscode",
+            ".anchora",
+            "dist",
+            "build",
+            "__pycache__",
+            ".idea",
+            "out",
         ];
-
         if let Ok(entries) = std::fs::read_dir(current_path) {
             for entry in entries.flatten() {
                 let path = entry.path();
@@ -158,45 +183,62 @@ impl TaskManagerHandler {
                         }
                     }
                     Box::pin(self.scan_directory_recursive(
-                        &path, 
-                        workspace_root, 
-                        file_patterns, 
-                        project_data, 
-                        scan_result
-                    )).await?;
+                        &path,
+                        workspace_root,
+                        file_patterns,
+                        project_data,
+                        scan_result,
+                    ))
+                    .await?;
                 } else if path.is_file() {
                     if let Some(file_name) = path.file_name().and_then(|n| n.to_str()) {
                         if self.should_scan_file(file_name, file_patterns) {
                             if let Ok(content) = std::fs::read_to_string(&path) {
-                                let relative_path = path.strip_prefix(workspace_root)
+                                let relative_path = path
+                                    .strip_prefix(workspace_root)
                                     .unwrap_or(&path)
                                     .to_string_lossy()
                                     .replace('\\', "/");
-
                                 match self.parser.scan_file(&relative_path, &content) {
                                     Ok(labels) => {
                                         scan_result.files_scanned += 1;
                                         scan_result.tasks_found += labels.len() as u32;
-                                        
+
                                         if !labels.is_empty() {
-                                            println!("Found {} tasks in file: {}", labels.len(), relative_path);
+                                            println!(
+                                                "Found {} tasks in file: {}",
+                                                labels.len(),
+                                                relative_path
+                                            );
                                             for (line, label) in &labels {
-                                                println!("  Line {}: {}:{} - {:?}", 
-                                                    line, label.section, label.task_id, 
-                                                    label.description.as_ref().unwrap_or(&"No description".to_string()));
+                                                println!(
+                                                    "  Line {}: {}:{} - {:?}",
+                                                    line,
+                                                    label.section,
+                                                    label.task_id,
+                                                    label
+                                                        .description
+                                                        .as_ref()
+                                                        .unwrap_or(&"No description".to_string())
+                                                );
                                             }
                                         }
-
                                         if let Err(e) = self.parser.update_project_from_labels(
                                             project_data,
                                             &relative_path,
-                                            labels
+                                            labels,
                                         ) {
-                                            scan_result.errors.push(format!("Error updating project data for {}: {}", relative_path, e));
+                                            scan_result.errors.push(format!(
+                                                "Error updating project data for {}: {}",
+                                                relative_path, e
+                                            ));
                                         }
                                     }
                                     Err(e) => {
-                                        scan_result.errors.push(format!("Error scanning file {}: {}", relative_path, e));
+                                        scan_result.errors.push(format!(
+                                            "Error scanning file {}: {}",
+                                            relative_path, e
+                                        ));
                                     }
                                 }
                             }
@@ -205,10 +247,8 @@ impl TaskManagerHandler {
                 }
             }
         }
-        
         Ok(())
     }
-
     fn should_scan_file(&self, file_name: &str, patterns: &[String]) -> bool {
         for pattern in patterns {
             if pattern.starts_with("**/*.") {
@@ -225,19 +265,20 @@ impl TaskManagerHandler {
         }
         false
     }
-
-    async fn get_tasks(&self, _params: Option<GetTasksParams>) -> anyhow::Result<serde_json::Value> {
+    async fn get_tasks(
+        &self,
+        _params: Option<GetTasksParams>,
+    ) -> anyhow::Result<serde_json::Value> {
         let project_data = self.storage.load_project_data().await?;
         Ok(serde_json::to_value(&project_data)?)
     }
-
     async fn create_task(&self, params: CreateTaskParams) -> anyhow::Result<serde_json::Value> {
         let mut project_data = self.storage.load_project_data().await?;
         project_data.add_task(
             &params.section,
             &params.task_id,
             params.title,
-            params.description
+            params.description,
         )?;
         self.storage.save_project_data(&project_data).await?;
         Ok(serde_json::json!({
@@ -245,8 +286,10 @@ impl TaskManagerHandler {
             "message": format!("Task {}:{} created successfully", params.section, params.task_id)
         }))
     }
-
-    async fn update_task_status(&self, params: UpdateTaskStatusParams) -> anyhow::Result<serde_json::Value> {
+    async fn update_task_status(
+        &self,
+        params: UpdateTaskStatusParams,
+    ) -> anyhow::Result<serde_json::Value> {
         let mut project_data = self.storage.load_project_data().await?;
         let status = match params.status.to_lowercase().as_str() {
             "todo" => TaskStatus::Todo,
@@ -262,7 +305,6 @@ impl TaskManagerHandler {
             "message": format!("Task {}:{} status updated to {}", params.section, params.task_id, params.status)
         }))
     }
-
     async fn delete_task(&self, params: DeleteTaskParams) -> anyhow::Result<serde_json::Value> {
         let mut project_data = self.storage.load_project_data().await?;
         project_data.delete_task(&params.section, &params.task_id)?;
@@ -272,8 +314,10 @@ impl TaskManagerHandler {
             "message": format!("Task {}:{} deleted successfully", params.section, params.task_id)
         }))
     }
-
-    async fn find_task_references(&self, params: FindTaskReferencesParams) -> anyhow::Result<Vec<TaskReference>> {
+    async fn find_task_references(
+        &self,
+        params: FindTaskReferencesParams,
+    ) -> anyhow::Result<Vec<TaskReference>> {
         let project_data = self.storage.load_project_data().await?;
         if let Some(task) = project_data.get_task(&params.section, &params.task_id) {
             let mut references = Vec::new();
@@ -288,10 +332,13 @@ impl TaskManagerHandler {
             }
             Ok(references)
         } else {
-            Err(anyhow::anyhow!("Task not found: {}:{}", params.section, params.task_id))
+            Err(anyhow::anyhow!(
+                "Task not found: {}:{}",
+                params.section,
+                params.task_id
+            ))
         }
     }
-
     async fn create_note(&self, params: CreateNoteParams) -> anyhow::Result<CreateNoteResponse> {
         let mut project_data = self.storage.load_project_data().await?;
         let suggested_status = if let Some(status_str) = params.suggested_status {
@@ -305,7 +352,6 @@ impl TaskManagerHandler {
         } else {
             None
         };
-
         let note_id = project_data.add_note(
             params.title.clone(),
             params.content,
@@ -313,7 +359,6 @@ impl TaskManagerHandler {
             params.suggested_task_id,
             suggested_status,
         )?;
-
         self.storage.save_project_data(&project_data).await?;
         Ok(CreateNoteResponse {
             success: true,
@@ -321,12 +366,10 @@ impl TaskManagerHandler {
             note_id,
         })
     }
-
     async fn get_notes(&self) -> anyhow::Result<Vec<Note>> {
         let project_data = self.storage.load_project_data().await?;
         Ok(project_data.get_all_notes().into_iter().cloned().collect())
     }
-
     async fn generate_task_link(&self, note_id: String) -> anyhow::Result<GenerateLinkResponse> {
         let mut project_data = self.storage.load_project_data().await?;
         let link = project_data.generate_note_link(&note_id)?;
@@ -336,7 +379,6 @@ impl TaskManagerHandler {
             link,
         })
     }
-
     async fn delete_note(&self, note_id: String) -> anyhow::Result<BasicResponse> {
         let mut project_data = self.storage.load_project_data().await?;
         project_data.delete_note(&note_id)?;
@@ -346,7 +388,6 @@ impl TaskManagerHandler {
             message: "Note deleted successfully".to_string(),
         })
     }
-
     async fn search_tasks(&self, params: SearchTasksParams) -> anyhow::Result<serde_json::Value> {
         let project_data = self.storage.load_project_data().await?;
         self.search_engine.index_project(&project_data)?;
@@ -359,12 +400,12 @@ impl TaskManagerHandler {
         let result = self.search_engine.search(&search_query)?;
         Ok(serde_json::to_value(result)?)
     }
-
     async fn get_statistics(&self) -> anyhow::Result<serde_json::Value> {
         let project_data = self.storage.load_project_data().await?;
-        self.statistics_manager.get_statistics(&project_data).map(|stats| serde_json::to_value(stats).unwrap_or(serde_json::Value::Null))
+        self.statistics_manager
+            .get_statistics(&project_data)
+            .map(|stats| serde_json::to_value(stats).unwrap_or(serde_json::Value::Null))
     }
-
     async fn get_task_overview(&self) -> anyhow::Result<serde_json::Value> {
         let project_data = self.storage.load_project_data().await?;
         let overview = self.statistics_manager.get_overview(&project_data)?;
@@ -386,7 +427,6 @@ impl TaskManagerHandler {
                     section_tasks.push(task_info);
                 }
             }
-            
             let section_with_tasks = serde_json::json!({
                 "name": section_summary.name,
                 "total_tasks": section_summary.total_tasks,
@@ -422,18 +462,20 @@ impl TaskManagerHandler {
                 "productivity_score": 75.0
             }
         });
-        
+
         let complete_overview = serde_json::json!({
             "sections": sections_with_tasks,
             "statistics": task_statistics,
             "recent_activity": recent_activity,
             "recommendations": []
         });
-        
+
         Ok(complete_overview)
     }
-
-    async fn validate_task_input(&self, params: ValidateTaskParams) -> anyhow::Result<serde_json::Value> {
+    async fn validate_task_input(
+        &self,
+        params: ValidateTaskParams,
+    ) -> anyhow::Result<serde_json::Value> {
         let project_data = self.storage.load_project_data().await?;
         self.validation_engine.update_context(project_data)?;
         let validation_params = ValidationParams {
@@ -444,26 +486,35 @@ impl TaskManagerHandler {
             check_duplicates: params.check_duplicates,
             suggest_alternatives: params.suggest_alternatives,
         };
-        
-        let result = self.validation_engine.validate_task_creation(&validation_params)?;
+        let result = self
+            .validation_engine
+            .validate_task_creation(&validation_params)?;
         Ok(serde_json::to_value(result)?)
     }
-
-    async fn get_suggestions(&self, params: GetSuggestionsParams) -> anyhow::Result<serde_json::Value> {
+    async fn get_suggestions(
+        &self,
+        params: GetSuggestionsParams,
+    ) -> anyhow::Result<serde_json::Value> {
         let suggestions = self.search_engine.get_suggestions(&params.partial_query)?;
         Ok(serde_json::to_value(suggestions)?)
     }
-
-    async fn check_task_conflicts(&self, params: CheckConflictsParams) -> anyhow::Result<serde_json::Value> {
+    async fn check_task_conflicts(
+        &self,
+        params: CheckConflictsParams,
+    ) -> anyhow::Result<serde_json::Value> {
         let project_data = self.storage.load_project_data().await?;
         self.validation_engine.update_context(project_data)?;
-        let result = self.validation_engine.check_task_conflicts(&params.section, &params.task_id)?;
+        let result = self
+            .validation_engine
+            .check_task_conflicts(&params.section, &params.task_id)?;
         Ok(serde_json::to_value(result)?)
     }
 }
-
 impl JsonRpcHandler for TaskManagerHandler {
-    fn handle_request(&self, request: JsonRpcRequest) -> std::pin::Pin<Box<dyn std::future::Future<Output = JsonRpcResponse> + Send + '_>> {
+    fn handle_request(
+        &self,
+        request: JsonRpcRequest,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = JsonRpcResponse> + Send + '_>> {
         Box::pin(async move {
             match request.method.as_str() {
                 "scan_project" => {
@@ -517,9 +568,7 @@ impl JsonRpcHandler for TaskManagerHandler {
                         FindTaskReferencesParams,
                         "find_task_references",
                         "Find task references",
-                        |params| async {
-                            self.find_task_references(params).await
-                        }
+                        |params| async { self.find_task_references(params).await }
                     )
                 }
                 "create_note" => {
@@ -611,10 +660,7 @@ impl JsonRpcHandler for TaskManagerHandler {
                 }
                 _ => {
                     eprintln!("[ERROR] Unknown method: {}", request.method);
-                    JsonRpcServer::error_response(
-                        request.id,
-                        JsonRpcError::method_not_found()
-                    )
+                    JsonRpcServer::error_response(request.id, JsonRpcError::method_not_found())
                 }
             }
         })

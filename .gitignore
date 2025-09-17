@@ -107,3 +107,5 @@ $RECYCLE.BIN/
 .vs
 vscode/server/anchora.exe
 doc/doc.md
+.anchora
+vscode/server

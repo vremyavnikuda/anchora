@@ -112,6 +112,7 @@ export interface ScanProjectParams {
 export interface ScanProjectResult {
     readonly files_scanned: number;
     readonly tasks_found: number;
+    readonly tasks_removed: number;
     readonly errors: ReadonlyArray<string>;
 }
 

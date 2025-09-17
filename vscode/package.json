@@ -2,7 +2,7 @@
   "name": "anchora",
   "displayName": "anchora",
   "description": "Revolutionary task manager for developers that ties tasks to code, not files",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "publisher": "vremyavnikuda",
   "license": "Apache-2.0",
   "repository": {

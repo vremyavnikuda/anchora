@@ -1,13 +1,11 @@
 /*!
  * Anchora Task Manager Backend
- * 
+ *
  * Main entry point for the VSCode extension backend server.
  * Handles command-line arguments and starts the appropriate mode.
  */
 
-use anchora::{
-    JsonRpcServer, TaskManagerHandler, ScanProjectParams
-};
+use anchora::{JsonRpcServer, ScanProjectParams, TaskManagerHandler};
 use clap::{Arg, Command};
 use std::path::PathBuf;
 
@@ -22,7 +20,7 @@ async fn main() -> anyhow::Result<()> {
                 .long("workspace")
                 .value_name("PATH")
                 .help("Workspace directory path")
-                .required(true)
+                .required(true),
         )
         .arg(
             Arg::new("mode")
@@ -30,13 +28,14 @@ async fn main() -> anyhow::Result<()> {
                 .long("mode")
                 .value_name("MODE")
                 .help("Execution mode: server, scan")
-                .default_value("server")
+                .default_value("server"),
         )
         .get_matches();
 
     let workspace_path = PathBuf::from(
-        matches.get_one::<String>("workspace")
-            .expect("Workspace path is required")
+        matches
+            .get_one::<String>("workspace")
+            .expect("Workspace path is required"),
     );
     let mode = matches.get_one::<String>("mode").unwrap();
 
@@ -58,13 +57,13 @@ async fn main() -> anyhow::Result<()> {
                 workspace_path: workspace_path.to_string_lossy().to_string(),
                 file_patterns: None,
             };
-            
+
             let result = handler.scan_project(scan_params).await?;
-            
+
             println!("Scan completed:");
             println!("  Files scanned: {}", result.files_scanned);
             println!("  Tasks found: {}", result.tasks_found);
-            
+
             if !result.errors.is_empty() {
                 println!("  Errors:");
                 for error in &result.errors {
