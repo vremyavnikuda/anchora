@@ -9,7 +9,6 @@ pub struct ParsedTaskLabel {
     pub description: Option<String>,
     pub note: Option<String>,
 }
-
 pub struct TaskParser {
     full_definition_regex: Regex,
     with_status_regex: Regex,
@@ -17,7 +16,6 @@ pub struct TaskParser {
     with_note_regex: Regex,
     status_update_regex: Regex,
 }
-
 impl TaskParser {
     pub fn new() -> anyhow::Result<Self> {
         Ok(Self {
@@ -38,7 +36,6 @@ impl TaskParser {
             )?,
         })
     }
-
     pub fn parse_line(&self, line: &str) -> Option<ParsedTaskLabel> {
         let line = line.trim();
         if line.starts_with("/*")
@@ -67,7 +64,6 @@ impl TaskParser {
             let section = captures.get(1)?.as_str().to_string();
             let task_id = captures.get(2)?.as_str().to_string();
             let description = captures.get(3)?.as_str().to_string();
-
             return Some(ParsedTaskLabel {
                 section,
                 task_id,
@@ -119,7 +115,6 @@ impl TaskParser {
 
         None
     }
-
     fn parse_status(&self, status_str: &str) -> Option<TaskStatus> {
         match status_str.to_lowercase().as_str() {
             "todo" => Some(TaskStatus::Todo),
@@ -135,13 +130,11 @@ impl TaskParser {
         content: &str,
     ) -> anyhow::Result<Vec<(u32, ParsedTaskLabel)>> {
         let mut results = Vec::new();
-
         for (line_number, line) in content.lines().enumerate() {
             if let Some(parsed_label) = self.parse_line(line) {
                 results.push((line_number as u32 + 1, parsed_label));
             }
         }
-
         Ok(results)
     }
     pub fn update_project_from_labels(
@@ -150,7 +143,6 @@ impl TaskParser {
         file_path: &str,
         labels: Vec<(u32, ParsedTaskLabel)>,
     ) -> anyhow::Result<()> {
-        // Step 1: Clear existing file references for this file path to enable cleanup
         for (_section_name, section) in &mut project_data.sections {
             for (_task_id, task) in section {
                 if let Some(task_file) = task.files.get_mut(file_path) {
@@ -159,8 +151,6 @@ impl TaskParser {
                 }
             }
         }
-
-        // Step 2: Process new labels found in this file
         for (line_number, label) in labels {
             if let Some(description) = &label.description {
                 if project_data
@@ -195,7 +185,6 @@ impl TaskParser {
         Ok(())
     }
 }
-
 #[derive(Debug)]
 pub struct ScanResult {
     pub files_scanned: u32,
@@ -203,7 +192,6 @@ pub struct ScanResult {
     pub tasks_removed: u32,
     pub errors: Vec<String>,
 }
-
 impl ScanResult {
     pub fn new() -> Self {
         Self {
@@ -214,16 +202,13 @@ impl ScanResult {
         }
     }
 }
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
     #[test]
     fn test_parse_full_definition() {
         let parser = TaskParser::new().unwrap();
         let result = parser.parse_line("// dev:task_1: добавить функционал проверки");
-
         assert!(result.is_some());
         let parsed = result.unwrap();
         assert_eq!(parsed.section, "dev");
@@ -234,12 +219,10 @@ mod tests {
         );
         assert_eq!(parsed.status, None);
     }
-
     #[test]
     fn test_parse_with_status() {
         let parser = TaskParser::new().unwrap();
         let result = parser.parse_line("// dev:task_1:todo: добавить функционал проверки");
-
         assert!(result.is_some());
         let parsed = result.unwrap();
         assert_eq!(parsed.section, "dev");
@@ -250,12 +233,10 @@ mod tests {
         );
         assert_eq!(parsed.status, Some(TaskStatus::Todo));
     }
-
     #[test]
     fn test_parse_simple_reference() {
         let parser = TaskParser::new().unwrap();
         let result = parser.parse_line("// dev:task_1");
-
         assert!(result.is_some());
         let parsed = result.unwrap();
         assert_eq!(parsed.section, "dev");
@@ -263,31 +244,26 @@ mod tests {
         assert_eq!(parsed.description, None);
         assert_eq!(parsed.status, None);
     }
-
     #[test]
     fn test_parse_with_note() {
         let parser = TaskParser::new().unwrap();
         let result = parser.parse_line("// dev:task_1:основная_логика");
-
         assert!(result.is_some());
         let parsed = result.unwrap();
         assert_eq!(parsed.section, "dev");
         assert_eq!(parsed.task_id, "task_1");
         assert_eq!(parsed.note, Some("основная_логика".to_string()));
     }
-
     #[test]
     fn test_parse_status_update() {
         let parser = TaskParser::new().unwrap();
         let result = parser.parse_line("// dev:task_1:done");
-
         assert!(result.is_some());
         let parsed = result.unwrap();
         assert_eq!(parsed.section, "dev");
         assert_eq!(parsed.task_id, "task_1");
         assert_eq!(parsed.status, Some(TaskStatus::Done));
     }
-
     #[test]
     fn test_scan_file() {
         let parser = TaskParser::new().unwrap();

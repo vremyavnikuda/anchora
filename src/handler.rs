@@ -121,12 +121,9 @@ impl TaskManagerHandler {
             &mut scan_result,
         )
         .await?;
-
-        // Step 3: Remove tasks that have no file references (cleanup)
         let mut tasks_to_remove = Vec::new();
         for (section_name, section) in &project_data.sections {
             for (task_id, task) in section {
-                // Remove task if it has no files or all files have no lines
                 if task.files.is_empty()
                     || task
                         .files
@@ -137,13 +134,10 @@ impl TaskManagerHandler {
                 }
             }
         }
-
-        // Remove orphaned tasks
         for (section, task_id) in &tasks_to_remove {
             let _ = project_data.delete_task(section, task_id);
             scan_result.tasks_removed += 1;
         }
-
         project_data.rebuild_index();
         self.storage.save_project_data(&project_data).await?;
         Ok(ScanProjectResult {
@@ -462,14 +456,12 @@ impl TaskManagerHandler {
                 "productivity_score": 75.0
             }
         });
-
         let complete_overview = serde_json::json!({
             "sections": sections_with_tasks,
             "statistics": task_statistics,
             "recent_activity": recent_activity,
             "recommendations": []
         });
-
         Ok(complete_overview)
     }
     async fn validate_task_input(

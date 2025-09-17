@@ -10,7 +10,6 @@ pub enum FileEvent {
     Deleted(PathBuf),
     Renamed { from: PathBuf, to: PathBuf },
 }
-
 #[derive(Debug, Clone)]
 pub struct WatcherConfig {
     pub file_patterns: Vec<String>,
@@ -18,7 +17,6 @@ pub struct WatcherConfig {
     pub max_file_size: u64,
     pub debounce_timeout: u64,
 }
-
 impl Default for WatcherConfig {
     fn default() -> Self {
         Self {
@@ -106,9 +104,7 @@ pub struct FileWatcher {
     _event_tx: mpsc::UnboundedSender<FileEvent>,
     _watcher: RecommendedWatcher,
 }
-
 impl FileWatcher {
-
     pub fn new(
         workspace_path: &Path,
         config: WatcherConfig,
@@ -219,7 +215,6 @@ impl FileWatcher {
         }
     }
 }
-
 #[derive(Debug, Clone)]
 pub struct WatcherStats {
     pub file_patterns_count: usize,
@@ -231,7 +226,6 @@ pub struct EventDebouncer {
     timeout: Duration,
     pending_events: std::collections::HashMap<PathBuf, FileEvent>,
 }
-
 impl EventDebouncer {
     pub fn new(timeout_ms: u64) -> Self {
         Self {
@@ -257,14 +251,12 @@ impl EventDebouncer {
         self.pending_events.drain().map(|(_, event)| event).collect()
     }
 }
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use tempfile::TempDir;
     use std::fs;
     use tokio::time::timeout;
-
     #[test]
     fn test_watcher_config_default() {
         let config = WatcherConfig::default();
@@ -272,7 +264,6 @@ mod tests {
         assert!(config.file_patterns.contains(&"**/*.rs".to_string()));
         assert!(config.ignored_dirs.contains(&"target".to_string()));
     }
-
     #[test]
     fn test_should_process_file() {
         let config = WatcherConfig::default();
@@ -290,7 +281,6 @@ mod tests {
         let target_file = temp_dir.path().join("target").join("test.rs");
         assert!(!file_watcher.should_process_file(&target_file));
     }
-
     #[test]
     fn test_matches_pattern() {
         assert!(FileWatcher::matches_pattern("test.rs", "*.rs"));
@@ -298,7 +288,6 @@ mod tests {
         assert!(!FileWatcher::matches_pattern("test.py", "*.rs"));
         assert!(FileWatcher::matches_pattern("anything", "**/*"));
     }
-
     #[tokio::test]
     async fn test_event_debouncer() {
         let mut debouncer = EventDebouncer::new(100);
